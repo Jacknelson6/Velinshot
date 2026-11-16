@@ -8,7 +8,7 @@
     <img alt="Swift and AppKit" src="https://img.shields.io/badge/built_with-Swift_%26_AppKit-F05138?style=flat-square">
     <a href="https://github.com/Jacknelson6/Velinshot/actions/runs/43818101131"><img alt="90 XCTest cases passed" src="https://img.shields.io/badge/tests-90_XCTest_passed-7160E8?style=flat-square"></a>
   </p>
-  <p><a href="https://github.com/Jacknelson6/Velinshot/tree/feature/native-macos">Source</a> · <a href="#make-it-yours">Build the preview</a> · <a href="https://github.com/Jacknelson6/Velinshot/blob/feature/native-macos/docs/FEATURES.md">Features</a></p>
+  <p><a href="https://github.com/Jacknelson6/Velinshot/tree/feature/native-macos">Source</a> · <a href="#make-it-yours">Build the preview</a> · <a href="docs/FEATURES.md">Features</a></p>
 </div>
 
 <picture>
@@ -84,7 +84,7 @@ Shift constrains boxes to squares, ellipses to circles, and arrows/lines to 45-d
 
 The app uses **AppKit, Core Graphics, ScreenCaptureKit, ImageIO and Vision**. There are no Swift package dependencies, embedded Chromium, Electron, Tauri, Rust runtime or background web service. Shared layout and drawing code keep rounding, crops and annotations aligned. File decoding and exact balance analysis run on one serial worker. A cached display proxy makes editing cheaper; copies, saves, OCR and history use the retained original pixels.
 
-Images are limited to 40 megapixels and 16,384 pixels per side. Previews render at a reduced raster size. Local history is off by default and capped at 50 entries or 250 MB when enabled. The most recently closed image is retained in memory until replaced or the app quits. There is no polling service or recurring idle render. See [performance notes](https://github.com/Jacknelson6/Velinshot/blob/feature/native-macos/docs/PERFORMANCE.md) for measured scope and limits.
+Images are limited to 40 megapixels and 16,384 pixels per side. Previews render at a reduced raster size. Local history is off by default and capped at 50 entries or 250 MB when enabled. The most recently closed image is retained in memory until replaced or the app quits. There is no polling service or recurring idle render. See [performance notes](docs/PERFORMANCE.md) for measured scope and limits.
 
 ## Local work stays local
 
@@ -100,7 +100,7 @@ bash scripts/check.sh
 
 Full Xcode runs the XCTest suite. Command Line Tools installations without XCTest run the same scenario bodies through an explicitly named native assertion harness. Unsupported test constructs fail rather than being skipped. Local checks also exercise hidden native canvas gestures, preferences, promised PNG files, real image decoding and OCR.
 
-Hosted CI runs XCTest, a release build and bundle validation. Screen Recording and real drag/Share flows require a Mac GUI and are reported separately. See [validation notes](https://github.com/Jacknelson6/Velinshot/blob/feature/native-macos/docs/QA.md) for evidence and remaining permission-dependent checks.
+Hosted CI runs XCTest, a release build and bundle validation. Screen Recording and real drag/Share flows require a Mac GUI and are reported separately. See [validation notes](docs/QA.md) for evidence and remaining permission-dependent checks.
 
 
 Contributions are welcome. [Read the guide](CONTRIBUTING.md), keep the app small, and make the screenshot better.

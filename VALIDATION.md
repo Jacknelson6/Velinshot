@@ -1,6 +1,6 @@
 # Preview status
 
-The runnable native app and complete source are on [feature/native-macos](https://github.com/Jacknelson6/Velinshot/tree/feature/native-macos), under review in [PR 1](https://github.com/Jacknelson6/Velinshot/pull/1). This main branch presents the original identity and real native editor views while release acceptance remains open.
+This integration branch includes the runnable native preview and complete source. The published feature remains under review in [PR 1](https://github.com/Jacknelson6/Velinshot/pull/1). Live acceptance remains open; preparing this branch does not publish an app release or pass those checks.
 
 Source 68722db56862b34c3bfa4a4dc3d2ab2343c9e3c4 passes [full-Xcode CI](https://github.com/Jacknelson6/Velinshot/actions/runs/43818101131): all 90 XCTest cases, release compilation and bundle verification. The local gate also passed 10 assertion-failure probes, 92 native integration checks, actual image decode/encode and OCR.
 
