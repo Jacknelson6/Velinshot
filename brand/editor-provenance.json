@@ -1,0 +1,48 @@
+{
+  "description" : "Native UI rendered from the real app with a synthetic fixture. These are view exports, not live screen recordings.",
+  "drawingSymbolPoints" : 19,
+  "drawingTargetPoints" : [
+    38,
+    32
+  ],
+  "layouts" : [
+    {
+      "appearance" : "light",
+      "canvasHeight" : 536,
+      "canvasWidth" : 642,
+      "file" : "editor-light.png",
+      "source" : "native AppKit view hierarchy with synthetic fixture",
+      "windowHeight" : 650,
+      "windowWidth" : 950
+    },
+    {
+      "appearance" : "light",
+      "canvasHeight" : 446,
+      "canvasWidth" : 512,
+      "file" : "editor-light-minimum.png",
+      "source" : "native AppKit view hierarchy with synthetic fixture",
+      "windowHeight" : 560,
+      "windowWidth" : 820
+    },
+    {
+      "appearance" : "dark",
+      "canvasHeight" : 536,
+      "canvasWidth" : 642,
+      "file" : "editor-dark.png",
+      "source" : "native AppKit view hierarchy with synthetic fixture",
+      "windowHeight" : 650,
+      "windowWidth" : 950
+    },
+    {
+      "appearance" : "dark",
+      "canvasHeight" : 446,
+      "canvasWidth" : 512,
+      "file" : "editor-dark-minimum.png",
+      "source" : "native AppKit view hierarchy with synthetic fixture",
+      "windowHeight" : 560,
+      "windowWidth" : 820
+    }
+  ],
+  "panelBorders" : false,
+  "toolbarSymbolPoints" : 17
+}

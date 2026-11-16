@@ -48,7 +48,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     let source: CGImage
     var state: EditState { didSet { setAccessibilityValue("\(state.annotations.count) annotations");requestRender() } }
     var backgroundImage: CGImage? { didSet { requestRender() } }
-    var tool: EditorTool = .select { didSet { clearSelection(); window?.invalidateCursorRects(for: self) } }
+    var tool: EditorTool = .select { didSet { if oldValue != tool { finishPointerGesture() };clearSelection(); window?.invalidateCursorRects(for: self) } }
     var annotationColor = RGBA(hex: "#F05A6E")
     var lineWidth: Double = 6
     var fontSize: Double = 36
@@ -61,6 +61,9 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     var onKey:((NSEvent)->Bool)?
     var onTextEditingChange:((Bool)->Void)?
     private var preview: CGImage?
+    private let previewSource:PreviewSourceCache
+    private var renderScheduled = false
+    private var renderInFlight = false
     private var renderTask: DispatchWorkItem?
     private var renderTicket: PreviewTicket?
     private var generation = 0
@@ -76,8 +79,8 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     private var zoom: CGFloat = 1
     private var panOffset = CGPoint.zero
 
-    init(source: CGImage, state: EditState) {
-        self.source = source; self.state = state
+    init(source: CGImage, state: EditState, preparedPreview:ImagePreview? = nil) {
+        self.source = source; self.state = state;self.previewSource = PreviewSourceCache(source:source,prepared:preparedPreview)
         super.init(frame: .zero)
         wantsLayer = true
         registerForDraggedTypes([.fileURL, .png, .tiff])
@@ -126,32 +129,47 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     }
     private func requestRender() {
         generation += 1
-        let number = generation
-        renderTask?.cancel()
-        renderTicket?.cancel()
+        scheduleRender()
+    }
+    private func scheduleRender() {
+        guard !renderScheduled,!renderInFlight else { return }
+        renderScheduled = true
+        // One pending frame and one in flight, rather than a queue of canceled
+        // full-resolution renders. Pointer movement cannot starve live drawing.
+        let task = DispatchWorkItem { [weak self] in self?.startRender() }
+        renderTask = task;DispatchQueue.main.asyncAfter(deadline:.now()+0.008,execute:task)
+    }
+    private func startRender() {
+        renderScheduled = false;renderInFlight = true
+        let number = generation,state = state,background = backgroundImage,cache = previewSource
         let ticket = PreviewTicket();renderTicket = ticket
-        let image = source, state = state, background = backgroundImage
-        let task = DispatchWorkItem { [weak self] in
+        Self.renderQueue.async { [weak self] in
             guard !ticket.isCancelled else { return }
-            do {
-                let result = try CanvasRenderer.render(source: image, state: state, backgroundImage: background, previewMaxDimension: 1400)
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.generation == number else { return }
-                    self.preview = result; self.needsDisplay = true
+            let result = autoreleasepool { Result { try cache.render(state:state,background:background) } }
+            DispatchQueue.main.async { [weak self] in
+                guard let self,!ticket.isCancelled else { return }
+                self.renderInFlight = false
+                switch result {
+                case .success(let image):self.preview = image;self.needsDisplay = true
+                case .failure(let error):if self.generation == number { self.onError?(error) }
                 }
-            } catch {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.generation == number else { return }
-                    self.onError?(error)
-                }
+                if self.generation != number { self.scheduleRender() }
             }
         }
-        renderTask = task
-        Self.renderQueue.asyncAfter(deadline: .now()+0.012, execute: task)
+    }
+    var hasActiveGesture:Bool { gestureBefore != nil || textField != nil }
+    /// Finite native view export for documentation, with the same preview path.
+    /// Normal editing uses the asynchronous scheduler above.
+    func prepareDocumentationSnapshot() throws {
+        let state = state,background = backgroundImage,cache = previewSource
+        preview = try Self.renderQueue.sync { try cache.render(state:state,background:background) }
+        needsDisplay = true
     }
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.controlBackgroundColor.setFill()
+        StudioPalette.surface.setFill()
         bounds.fill()
+        StudioPalette.canvas.setFill()
+        NSBezierPath(roundedRect:bounds.insetBy(dx:10,dy:10),xRadius:14,yRadius:14).fill()
         if let preview {
             NSImage(cgImage: preview, size: .zero).draw(in: displayRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true,
                                                       hints: [.interpolation: NSImageInterpolation.high])
@@ -203,7 +221,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             let tolerance: CGFloat = 10
             selectedIndex = state.annotations.indices.reversed().first { annotationBounds(state.annotations[$0]).insetBy(dx:-tolerance,dy:-tolerance).contains(point) }
             onSelection?(selectedIndex.map{state.annotations[$0]})
-            if event.clickCount == 2,let index = selectedIndex,state.annotations[index].kind == .text { startText(at:state.annotations[index].points[0],annotationIndex:index) }
+            if event.clickCount == 2,let index = selectedIndex,state.annotations[index].kind == .text,let origin = state.annotations[index].points.first { startText(at:origin,annotationIndex:index) }
             needsDisplay = true; return
         }
         if tool == .text { startText(at:point); return }
@@ -216,7 +234,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     override func mouseDragged(with event: NSEvent) {
         guard textField == nil else { return }
         guard let start = gestureStart, var point = sourcePoint(convert(event.locationInWindow,from:nil)) else { return }
-        if tool == .select, let index = selectedIndex, let before = gestureBefore, before.annotations.indices.contains(index) {
+        if tool == .select, let index = selectedIndex, let before = gestureBefore, before.annotations.indices.contains(index),state.annotations.indices.contains(index),state.annotations[index].id == before.annotations[index].id {
             if let corner = resizeCorner {
                 let bounds = annotationBounds(before.annotations[index])
                 let corners = [bounds.origin,CGPoint(x:bounds.maxX,y:bounds.minY),CGPoint(x:bounds.minX,y:bounds.maxY),CGPoint(x:bounds.maxX,y:bounds.maxY)]
@@ -226,7 +244,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             } else { state.annotations[index].points = before.annotations[index].points.map { CGPoint(x:$0.x+point.x-start.x,y:$0.y+point.y-start.y) } }
         } else if tool == .crop {
             cropDraft = CGRect(x:min(start.x,point.x),y:min(start.y,point.y),width:abs(point.x-start.x),height:abs(point.y-start.y)); needsDisplay = true
-        } else if let index = draftIndex {
+        } else if let index = draftIndex,state.annotations.indices.contains(index),!state.annotations[index].points.isEmpty {
             if event.modifierFlags.contains(.shift) {
                 let dx = point.x-start.x,dy = point.y-start.y
                 if tool == .rectangle || tool == .ellipse {
@@ -242,16 +260,22 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         }
     }
     override func mouseUp(with event: NSEvent) {
-        guard textField == nil else { return }
-        guard tool != .text else { return }
-        if tool == .crop, let crop = cropDraft, crop.width >= 4, crop.height >= 4 { state.crop = crop;state.style.autoBalance = false; fit() }
-        if let index = draftIndex, tool != .number {
+        finishPointerGesture()
+    }
+    func finishPointerGesture() {
+        guard textField == nil,gestureBefore != nil else { return }
+        if let crop = cropDraft,crop.width >= 4,crop.height >= 4 { state.crop = crop;state.style.autoBalance = false;fit() }
+        if let index = draftIndex,state.annotations.indices.contains(index),state.annotations[index].kind != .number {
             let points = state.annotations[index].points
-            if let first = points.first, let last = points.last, hypot(last.x-first.x,last.y-first.y)<1, tool != .pen {
+            if let first = points.first, let last = points.last, hypot(last.x-first.x,last.y-first.y)<1, state.annotations[index].kind != .pen {
                 state.annotations.remove(at:index)
             }
         }
         completeGesture()
+    }
+    @discardableResult func cancelPointerGesture() -> Bool {
+        guard textField == nil,let before = gestureBefore else { return false }
+        state = before;completeGesture();return true
     }
     private func completeGesture() {
         if let before = gestureBefore, before != state { onCommit?(before,state) }
@@ -294,6 +318,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         return false
     }
     func deleteSelection() {
+        cancelPointerGesture()
         guard let index = selectedIndex, state.annotations.indices.contains(index) else { return }
         let before = state; state.annotations.remove(at:index);clearSelection();onCommit?(before,state)
     }
@@ -338,4 +363,38 @@ private final class PreviewTicket {
     private var cancelled = false
     var isCancelled:Bool { lock.lock();defer{lock.unlock()};return cancelled }
     func cancel() { lock.lock();cancelled = true;lock.unlock() }
+}
+
+/// Accessed only by CanvasView.renderQueue; reduced source rasters are reused
+/// through a document's entire editing session. Full source stays export-only.
+private final class PreviewSourceCache {
+    private let original:CGImage
+    private var prepared:ImagePreview?
+    private var backgroundOriginal:CGImage?
+    private var backgroundPrepared:ImagePreview?
+    init(source:CGImage,prepared:ImagePreview?) { original = source;self.prepared = prepared }
+    func source() throws -> ImagePreview {
+        if let prepared { return prepared }
+        let preview = try ImageLoader.preview(image:original,maxDimension:1400);prepared = preview;return preview
+    }
+    func render(state:EditState,background image:CGImage?) throws -> CGImage {
+        let proxy = try source()
+        let layout = try CanvasRenderer.layout(sourceSize:proxy.sourceSize,state:state)
+        let fullScale = state.style.fixedWidth.map{CGFloat($0)/layout.canvasSize.width} ?? CGFloat(state.style.outputScale)
+        let rasterScale = min(fullScale,1400/max(layout.canvasSize.width,layout.canvasSize.height))
+        let availableX = proxy.pixelSize.width/proxy.sourceSize.width,availableY = proxy.pixelSize.height/proxy.sourceSize.height
+        if rasterScale > min(availableX,availableY)+0.000001 {
+            // A tight crop needs more detail than the whole-image proxy holds.
+            // The original is already decoded; crop that ROI instead of enlarging
+            // a thumbnail or resampling the whole large source again.
+            return try CanvasRenderer.render(source:original,state:state,backgroundImage:image,previewMaxDimension:1400)
+        }
+        return try CanvasRenderer.renderPreview(source:proxy,state:state,backgroundPreview:background(image),maximumDimension:1400)
+    }
+    func background(_ image:CGImage?) throws -> ImagePreview? {
+        guard let image else { backgroundOriginal = nil;backgroundPrepared = nil;return nil }
+        if backgroundOriginal === image { return backgroundPrepared }
+        let preview = try ImageLoader.preview(image:image,maxDimension:1400)
+        backgroundOriginal = image;backgroundPrepared = preview;return preview
+    }
 }

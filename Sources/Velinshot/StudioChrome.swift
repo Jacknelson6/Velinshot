@@ -1,0 +1,118 @@
+import AppKit
+
+/// Static native surfaces redraw only when their appearance or content changes.
+enum StudioPalette {
+    static let surface = NSColor(name:"Studio surface") { appearance in
+        appearance.bestMatch(from:[.aqua,.darkAqua]) == .darkAqua
+            ? NSColor(srgbRed:0.115,green:0.119,blue:0.145,alpha:1)
+            : NSColor(srgbRed:0.982,green:0.981,blue:0.987,alpha:1)
+    }
+    static let canvas = NSColor(name:"Studio canvas") { appearance in
+        appearance.bestMatch(from:[.aqua,.darkAqua]) == .darkAqua
+            ? NSColor(srgbRed:0.077,green:0.081,blue:0.103,alpha:1)
+            : NSColor(srgbRed:0.925,green:0.930,blue:0.950,alpha:1)
+    }
+    static let accent = NSColor(name:"Studio accent") { appearance in
+        appearance.bestMatch(from:[.aqua,.darkAqua]) == .darkAqua
+            ? NSColor(srgbRed:0.70,green:0.65,blue:1,alpha:1) : Brand.iris
+    }
+}
+
+final class StudioSurface:NSView {
+    var fill:NSColor = StudioPalette.surface
+    override func draw(_ dirtyRect:NSRect) {
+        fill.setFill();bounds.fill()
+    }
+}
+
+/// Uses ordinary NSButton targeting, keyboard navigation and accessibility.
+/// Hover is event-driven; there are no animations, timers or idle refreshes.
+final class StudioButton:NSButton {
+    enum Kind { case quiet, secondary, primary, tool }
+    var kind:Kind = .quiet
+    var shortcut:String?
+    var actionHandler:(()->Void)?
+    private var hovered = false
+    private var tracking:NSTrackingArea?
+    convenience init(_ title:String = "",symbol:String? = nil,kind:Kind = .quiet,shortcut:String? = nil,action:@escaping()->Void) {
+        self.init(frame:.zero)
+        self.title = title;self.kind = kind;self.shortcut = shortcut;self.actionHandler = action
+        if let symbol { image = Brand.symbol(symbol,size:kind == .tool ? 19 : 17) }
+        font = .systemFont(ofSize:12,weight:.medium)
+        isBordered = false;focusRingType = .exterior;setButtonType(.momentaryPushIn)
+        target = self;self.action = #selector(invoke)
+        translatesAutoresizingMaskIntoConstraints = false
+        heightAnchor.constraint(equalToConstant:kind == .primary || kind == .secondary ? 36 : 32).isActive = true
+    }
+    @objc private func invoke() { actionHandler?() }
+    override var intrinsicContentSize:NSSize {
+        let text = (title as NSString).size(withAttributes:[.font:font ?? NSFont.systemFont(ofSize:12)])
+        return NSSize(width:max(32,text.width+(image == nil ? 0 : 25)+(shortcut == nil ? 0 : 27)+24),height:36)
+    }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect:.zero,options:[.mouseEnteredAndExited,.activeInKeyWindow,.inVisibleRect],owner:self,userInfo:nil)
+        addTrackingArea(area);tracking = area
+    }
+    override func mouseEntered(with event:NSEvent) { hovered = true;needsDisplay = true }
+    override func mouseExited(with event:NSEvent) { hovered = false;needsDisplay = true }
+    override var state:NSControl.StateValue { didSet { needsDisplay = true } }
+    override var isEnabled:Bool { didSet { needsDisplay = true } }
+    override func draw(_ dirtyRect:NSRect) {
+        let selected = kind == .tool && state == .on
+        let active = isHighlighted || hovered
+        let shape = NSBezierPath(roundedRect:bounds.insetBy(dx:0.5,dy:0.5),xRadius:8,yRadius:8)
+        let foreground:NSColor = kind == .primary ? .white : selected ? StudioPalette.accent : .labelColor
+        if kind == .primary {
+            (isHighlighted ? Brand.iris.blended(withFraction:0.15,of:.black)! : Brand.iris).setFill();shape.fill()
+        } else if selected || active || kind == .secondary {
+            (selected ? StudioPalette.accent.withAlphaComponent(0.13) : NSColor.labelColor.withAlphaComponent(active ? 0.08 : 0.035)).setFill();shape.fill()
+        }
+        let alpha:CGFloat = isEnabled ? 1 : 0.35
+        let textFont = NSFont.systemFont(ofSize:12,weight:kind == .primary ? .semibold : .medium)
+        let textWidth = (title as NSString).size(withAttributes:[.font:textFont]).width
+        let iconBox:CGFloat = kind == .tool ? 19 : 17
+        let total = textWidth+(image == nil ? 0 : (title.isEmpty ? iconBox : iconBox+7))+(shortcut == nil ? 0 : 29)
+        var x = (bounds.width-total)/2
+        if let image {
+            let tinted = image.withSymbolConfiguration(.init(paletteColors:[foreground.withAlphaComponent(alpha)])) ?? image
+            let factor = min(iconBox/max(1,tinted.size.width),iconBox/max(1,tinted.size.height))
+            let size = NSSize(width:tinted.size.width*factor,height:tinted.size.height*factor)
+            tinted.draw(in:CGRect(x:x+(iconBox-size.width)/2,y:bounds.midY-size.height/2,width:size.width,height:size.height),from:.zero,operation:.sourceOver,fraction:alpha,respectFlipped:true,hints:nil)
+            x += title.isEmpty ? iconBox : iconBox+7
+        }
+        (title as NSString).draw(at:CGPoint(x:x,y:bounds.midY-7.5),withAttributes:[.font:textFont,.foregroundColor:foreground.withAlphaComponent(alpha)])
+        if let shortcut {
+            let rect = CGRect(x:x+textWidth+9,y:bounds.midY-9,width:20,height:18)
+            foreground.withAlphaComponent(kind == .primary ? 0.15 : 0.065).setFill()
+            NSBezierPath(roundedRect:rect,xRadius:4,yRadius:4).fill()
+            let keyFont = NSFont.monospacedSystemFont(ofSize:10,weight:.medium)
+            let width = (shortcut as NSString).size(withAttributes:[.font:keyFont]).width
+            (shortcut as NSString).draw(at:CGPoint(x:rect.midX-width/2,y:rect.midY-6.5),withAttributes:[.font:keyFont,.foregroundColor:foreground.withAlphaComponent(alpha*0.85)])
+        }
+    }
+    override var focusRingMaskBounds:NSRect { bounds }
+    override func drawFocusRingMask() { NSBezierPath(roundedRect:bounds,xRadius:8,yRadius:8).fill() }
+}
+
+final class GradientSwatch:NSButton {
+    let first:NSColor
+    let second:NSColor
+    var actionHandler:(()->Void)?
+    init(name:String,first:NSColor,second:NSColor,action:@escaping()->Void) {
+        self.first = first;self.second = second;self.actionHandler = action
+        super.init(frame:.zero)
+        isBordered = false;title = "";toolTip = name;setAccessibilityLabel("\(name) gradient")
+        target = self;self.action = #selector(invoke)
+        translatesAutoresizingMaskIntoConstraints = false
+        widthAnchor.constraint(equalToConstant:32).isActive = true;heightAnchor.constraint(equalToConstant:28).isActive = true
+    }
+    required init?(coder:NSCoder) { fatalError("init(coder:) is unavailable") }
+    @objc private func invoke() { actionHandler?() }
+    override func draw(_ dirtyRect:NSRect) {
+        let path = NSBezierPath(roundedRect:bounds.insetBy(dx:1,dy:1),xRadius:7,yRadius:7)
+        NSGradient(starting:first,ending:second)?.draw(in:path,angle:35)
+        NSColor.black.withAlphaComponent(0.10).setStroke();path.lineWidth = 0.7;path.stroke()
+    }
+}

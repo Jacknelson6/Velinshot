@@ -35,7 +35,9 @@ public enum AutoBeautify {
     }
 
     public static func contentBounds(source: CGImage) -> CGRect? {
-        // Scan every pixel at source resolution. Thumbnail scans can erase thin UI strokes.
+        // Seek exact boundaries at source resolution. Every omitted interior
+        // pixel is already enclosed by proven extrema; no thumbnail can erase
+        // a one-pixel mark. Uniform inputs still receive one complete scan.
         guard let sample = PixelSample(source: source) else { return nil }
         let corners = [sample.pixel(x: 0, y: 0), sample.pixel(x: sample.width - 1, y: 0),
                        sample.pixel(x: 0, y: sample.height - 1),
@@ -43,18 +45,27 @@ public enum AutoBeautify {
         let reference = corners[0]
         let transparentBorder = corners.allSatisfy { $0.3 < 8 }
         guard transparentBorder || corners.allSatisfy({ distance($0, reference) < 10 }) else { return nil }
-        var minX = sample.width, minY = sample.height, maxX = -1, maxY = -1
-        for y in 0..<sample.height {
-            for x in 0..<sample.width {
-                let pixel = sample.pixel(x: x, y: y)
-                let isContent = transparentBorder ? pixel.3 > 8 : distance(pixel, reference) > 10
-                if isContent {
-                    minX = min(minX, x); minY = min(minY, y)
-                    maxX = max(maxX, x); maxY = max(maxY, y)
-                }
-            }
+        func isContent(x: Int, y: Int) -> Bool {
+            let pixel = sample.pixel(x: x, y: y)
+            return transparentBorder ? pixel.3 > 8 : distance(pixel, reference) > 10
         }
-        guard maxX >= minX, maxY >= minY else { return nil }
+        func rowHasContent(_ y: Int) -> Bool {
+            for x in 0..<sample.width where isContent(x: x, y: y) { return true }
+            return false
+        }
+        var minY = 0
+        while minY < sample.height && !rowHasContent(minY) { minY += 1 }
+        guard minY < sample.height else { return nil }
+        var maxY = sample.height - 1
+        while maxY > minY && !rowHasContent(maxY) { maxY -= 1 }
+        func columnHasContent(_ x: Int) -> Bool {
+            for y in minY...maxY where isContent(x: x, y: y) { return true }
+            return false
+        }
+        var minX = 0
+        while minX < sample.width && !columnHasContent(minX) { minX += 1 }
+        var maxX = sample.width - 1
+        while maxX > minX && !columnHasContent(maxX) { maxX -= 1 }
         // Preserve a small safety edge around anti-aliased content.
         let margin = 2
         let x = max(0, minX - margin), y = max(0, minY - margin)

@@ -11,7 +11,7 @@ let package = Package(
     targets: [
         .target(name: "VelinshotCore"),
         .executableTarget(name: "Velinshot", dependencies: ["VelinshotCore"]),
-        .testTarget(name: "VelinshotCoreTests", dependencies: ["VelinshotCore"])
+        .testTarget(name: "VelinshotCoreTests", dependencies: ["VelinshotCore"], exclude: ["README.md"])
     ],
     swiftLanguageVersions: [.v5]
 )

@@ -64,7 +64,22 @@ public enum CanvasRenderer {
 
     public static func render(source: CGImage, state: EditState, backgroundImage: CGImage? = nil,
                               previewMaxDimension: Int? = nil) throws -> CGImage {
-        let layout = try layout(sourceSize: CGSize(width: source.width, height: source.height), state: state)
+        try renderRaster(source: source, sourceSize: CGSize(width: source.width, height: source.height),
+                         isProxy: false, state: state, backgroundImage: backgroundImage,
+                         backgroundSourceSize: nil, previewMaxDimension: previewMaxDimension)
+    }
+
+    public static func renderPreview(source: ImagePreview, state: EditState, backgroundImage: CGImage? = nil,
+                                     backgroundPreview: ImagePreview? = nil, maximumDimension: Int = 1400) throws -> CGImage {
+        try renderRaster(source: source.bitmap, sourceSize: source.sourceSize, isProxy: true, state: state,
+                         backgroundImage: backgroundPreview?.bitmap ?? backgroundImage,
+                         backgroundSourceSize: backgroundPreview?.sourceSize, previewMaxDimension: maximumDimension)
+    }
+
+    private static func renderRaster(source: CGImage, sourceSize: CGSize, isProxy: Bool, state: EditState,
+                                     backgroundImage: CGImage?, backgroundSourceSize: CGSize?,
+                                     previewMaxDimension: Int?) throws -> CGImage {
+        let layout = try layout(sourceSize: sourceSize, state: state)
         let fullScale = state.style.fixedWidth.map { CGFloat($0) / layout.canvasSize.width } ?? CGFloat(state.style.outputScale)
         var scale = fullScale
         var pixelWidth = Int(layout.exportSize.width)
@@ -95,7 +110,8 @@ public enum CanvasRenderer {
         context.scaleBy(x: scale, y: -scale)
         let canvasRect = CGRect(origin: .zero, size: layout.canvasSize)
         let bitmapRect = CGRect(x: 0, y: 0, width: CGFloat(pixelWidth) / scale, height: CGFloat(pixelHeight) / scale)
-        drawBackground(state.style, image: backgroundImage, rect: canvasRect, bitmapRect: bitmapRect, context: context)
+        drawBackground(state.style, image: backgroundImage, imageSourceSize: backgroundSourceSize,
+                       rect: canvasRect, bitmapRect: bitmapRect, context: context)
 
         let radius = min(CGFloat(state.style.cornerRadius), min(layout.panelRect.width, layout.panelRect.height) / 2)
         let panelPath = CGPath(roundedRect: layout.panelRect, cornerWidth: radius, cornerHeight: radius, transform: nil)
@@ -129,11 +145,19 @@ public enum CanvasRenderer {
         context.saveGState()
         context.addPath(imagePath)
         context.clip()
-        guard let cropped = source.cropping(to: layout.cropRect) else { throw VelinshotError.invalidCrop }
-        drawImage(cropped, in: layout.imageRect, context: context)
+        if isProxy {
+            // Map each proxy axis independently into the original coordinate
+            // space. Clipping the full proxy avoids integer crop quantization.
+            drawImage(source, in: CGRect(x: layout.imageRect.minX - layout.cropRect.minX,
+                                        y: layout.imageRect.minY - layout.cropRect.minY,
+                                        width: sourceSize.width, height: sourceSize.height), context: context)
+        } else {
+            guard let cropped = source.cropping(to: layout.cropRect) else { throw VelinshotError.invalidCrop }
+            drawImage(cropped, in: layout.imageRect, context: context)
+        }
         context.translateBy(x: layout.imageRect.minX - layout.cropRect.minX,
                             y: layout.imageRect.minY - layout.cropRect.minY)
-        try drawAnnotations(state.annotations, source: source, context: context)
+        try drawAnnotations(state.annotations, source: source, proxySourceSize: isProxy ? sourceSize : nil, context: context)
         context.restoreGState()
         if state.style.borderWidth > 0 {
             context.saveGState()
@@ -229,7 +253,8 @@ public enum CanvasRenderer {
         drawText(visible, at: point, color: style.watermarkColor.nsColor, size: Double(fontSize), context: context)
     }
 
-    private static func drawBackground(_ style: CanvasStyle, image: CGImage?, rect: CGRect, bitmapRect: CGRect, context: CGContext) {
+    private static func drawBackground(_ style: CanvasStyle, image: CGImage?, imageSourceSize: CGSize?,
+                                       rect: CGRect, bitmapRect: CGRect, context: CGContext) {
         switch style.background {
         case .transparent: break
         case .solid:
@@ -248,8 +273,9 @@ public enum CanvasRenderer {
                 options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
         case .image:
             guard let image else { return } // Its fallback color was filled in device space.
-            let scale = max(bitmapRect.width / CGFloat(image.width), bitmapRect.height / CGFloat(image.height))
-            let size = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+            let sourceSize = imageSourceSize ?? CGSize(width: image.width, height: image.height)
+            let scale = max(bitmapRect.width / sourceSize.width, bitmapRect.height / sourceSize.height)
+            let size = CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
             drawImage(image, in: CGRect(x: bitmapRect.midX - size.width / 2, y: bitmapRect.midY - size.height / 2,
                                        width: size.width, height: size.height), context: context)
         }
@@ -263,7 +289,7 @@ public enum CanvasRenderer {
         context.restoreGState()
     }
 
-    private static func drawAnnotations(_ annotations: [Annotation], source: CGImage, context: CGContext) throws {
+    private static func drawAnnotations(_ annotations: [Annotation], source: CGImage, proxySourceSize: CGSize?, context: CGContext) throws {
         guard annotations.count <= 10_000, annotations.reduce(0, { $0 + $1.points.count }) <= 1_000_000 else {
             throw VelinshotError.invalidStyle("There are too many annotations.")
         }
@@ -336,7 +362,12 @@ public enum CanvasRenderer {
                 context.setFillColor(opaque.cgColor)
                 context.fill(rect.integral)
             case .blur:
-                drawBlur(source: source, rect: rect.integral, strength: max(8, width * 2), context: context)
+                if let proxySourceSize {
+                    drawProxyBlur(source: source, sourceSize: proxySourceSize, rect: rect.integral,
+                                  strength: max(8, width * 2), context: context)
+                } else {
+                    drawBlur(source: source, rect: rect.integral, strength: max(8, width * 2), context: context)
+                }
             }
             context.restoreGState()
         }
@@ -369,6 +400,22 @@ public enum CanvasRenderer {
         let white = CIImage(color: CIColor.white).cropped(to: extent)
         let opaque = blurred.composited(over: white)
         guard let output = blurContext.createCGImage(opaque, from: extent) else { return }
+        drawImage(output, in: bounded, context: context)
+    }
+
+    private static func drawProxyBlur(source: CGImage, sourceSize: CGSize, rect: CGRect, strength: CGFloat, context: CGContext) {
+        let bounded = rect.intersection(CGRect(origin: .zero, size: sourceSize))
+        guard !bounded.isNull, bounded.width > 0, bounded.height > 0 else { return }
+        let targetScale = min(1, max(0.000001, hypot(context.ctm.a, context.ctm.c)))
+        let mapped = CIImage(cgImage: source).transformed(by: CGAffineTransform(
+            scaleX: sourceSize.width / CGFloat(source.width), y: sourceSize.height / CGFloat(source.height)))
+        let region = CGRect(x: bounded.minX, y: sourceSize.height - bounded.maxY,
+                            width: bounded.width, height: bounded.height)
+        let proxy = mapped.cropped(to: region).transformed(by: CGAffineTransform(scaleX: targetScale, y: targetScale))
+        let blurred = proxy.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: strength * targetScale])
+            .cropped(to: proxy.extent)
+        let opaque = blurred.composited(over: CIImage(color: CIColor.white).cropped(to: proxy.extent))
+        guard let output = blurContext.createCGImage(opaque, from: proxy.extent) else { return }
         drawImage(output, in: bounded, context: context)
     }
 }

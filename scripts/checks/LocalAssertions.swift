@@ -6,8 +6,22 @@ class CoreCheckSuite {}
 enum CheckLedger { static var failures: [String] = [] }
 struct LocalCheckError: Error {}
 
-private func check(_ condition: Bool, _ message: String, file: StaticString, line: UInt) {
-    if !condition { CheckLedger.failures.append("\(file):\(line): \(message)") }
+private func check(_ condition: Bool, _ message: @autoclosure () -> String, file: StaticString, line: UInt) {
+    if !condition { CheckLedger.failures.append("\(file):\(line): \(message())") }
+}
+
+private func shortValue(_ value: Any, depth: Int = 0) -> String {
+    if depth > 3 { return String(describing: type(of: value)) }
+    if let string = value as? String { return String(string.prefix(256)) }
+    let mirror = Mirror(reflecting: value)
+    if mirror.displayStyle == .optional {
+        return mirror.children.first.map { "Optional(\(shortValue($0.value, depth: depth + 1)))" } ?? "nil"
+    }
+    if mirror.displayStyle == .collection || mirror.displayStyle == .dictionary || mirror.displayStyle == .set {
+        let prefix = mirror.children.prefix(8).map { shortValue($0.value, depth: depth + 1) }.joined(separator: ", ")
+        return "\(type(of: value))(count: \(mirror.children.count), prefix: [\(prefix)])"
+    }
+    return String(String(describing: value).prefix(512))
 }
 
 private func evaluated<T>(_ operation: () throws -> T, file: StaticString, line: UInt) -> T? {
@@ -18,7 +32,7 @@ private func evaluated<T>(_ operation: () throws -> T, file: StaticString, line:
 func XCTAssertEqual<T: Equatable>(_ lhs: @autoclosure () throws -> T, _ rhs: @autoclosure () throws -> T,
                                   _ message: String = "", file: StaticString = #filePath, line: UInt = #line) {
     guard let a = evaluated(lhs, file: file, line: line), let b = evaluated(rhs, file: file, line: line) else { return }
-    check(a == b, "Expected \(a) == \(b). \(message)", file: file, line: line)
+    check(a == b, "Expected \(shortValue(a)) == \(shortValue(b)). \(message)", file: file, line: line)
 }
 
 func XCTAssertTrue(_ value: @autoclosure () throws -> Bool, _ message: String = "", file: StaticString = #filePath, line: UInt = #line) {

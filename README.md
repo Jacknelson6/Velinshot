@@ -12,7 +12,12 @@
   <p><a href="https://github.com/Jacknelson6/Velinshot/releases">Download</a> · <a href="#make-it-yours">Build it</a> · <a href="docs/FEATURES.md">Features</a> · <a href="brand/BRAND.md">Brand kit</a></p>
 </div>
 
-![Velinshot editing a synthetic studio-notes image](brand/editor.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="brand/editor-dark.png">
+  <img src="brand/editor.png" alt="Velinshot framing and annotating a synthetic screenshot">
+</picture>
+
+<sub>Native UI rendered from the real app with a synthetic fixture.</sub>
 
 Free, native screenshot editing for macOS. No account, subscription, watermark requirement or browser runtime. Built from scratch with Swift and the frameworks already on your Mac.
 
@@ -63,15 +68,16 @@ On first capture, allow **Velinshot** in **System Settings → Privacy & Securit
 | N · X · L · V | Number · Crop · Line · Select |
 | Delete | Remove a selected mark |
 | ⌘0 · ⌘+ · ⌘− | Fit · Zoom in · Zoom out |
+| ⌘1 · ⌘2 · ⌘3 | Frame · Backdrop · Output inspector |
 | ⇧⌘T | Reopen the last closed screenshot |
 
 Shift constrains boxes to squares, ellipses to circles, and arrows/lines to 45-degree directions. Double-click a text mark to edit it, or double-click the background to copy and close. Letter shortcuts yield while you are typing.
 
 ## Small by design
 
-The app uses **AppKit, Core Graphics, ScreenCaptureKit, ImageIO and Vision**. There are no Swift package dependencies, embedded Chromium, Electron, Tauri, Rust runtime or background web service. One renderer produces the preview and the exported pixels, so rounding, crops and annotations travel together.
+The app uses **AppKit, Core Graphics, ScreenCaptureKit, ImageIO and Vision**. There are no Swift package dependencies, embedded Chromium, Electron, Tauri, Rust runtime or background web service. Shared layout and drawing code keep rounding, crops and annotations aligned. File decoding and exact balance analysis run on one serial worker. A cached display proxy makes editing cheaper; copies, saves, OCR and history use the retained original pixels.
 
-Images are limited to 40 megapixels and 16,384 pixels per side. Previews render at a reduced raster size. Local history is off by default and capped at 50 entries or 250 MB when enabled. The most recently closed image is retained in memory until replaced or the app quits.
+Images are limited to 40 megapixels and 16,384 pixels per side. Previews render at a reduced raster size. Local history is off by default and capped at 50 entries or 250 MB when enabled. The most recently closed image is retained in memory until replaced or the app quits. There is no polling service or recurring idle render. See [performance notes](docs/PERFORMANCE.md) for measured scope and limits.
 
 ## Local work stays local
 

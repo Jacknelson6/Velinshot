@@ -8,6 +8,7 @@ final class HistoryController: NSWindowController,NSTableViewDataSource,NSTableV
     private let table = NSTableView()
     private var entries:[HistoryEntry] = []
     private let note = Brand.label("",size:12)
+    private let loader = LatestImageWork<(CGImage,EditState)>()
     init() {
         let window = NSWindow(contentRect:CGRect(x:0,y:0,width:620,height:430),styleMask:[.titled,.closable,.resizable],backing:.buffered,defer:false)
         window.title = "Screenshot History";window.isReleasedWhenClosed = false
@@ -30,6 +31,7 @@ final class HistoryController: NSWindowController,NSTableViewDataSource,NSTableV
     required init?(coder:NSCoder) { fatalError("init(coder:) is unavailable") }
     override func showWindow(_ sender:Any?) { reload();NSApp.setActivationPolicy(.regular);super.showWindow(sender);window?.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true) }
     func reload() {
+        loader.cancel()
         do { entries = try store.entries();table.reloadData();note.stringValue = entries.isEmpty ? "No saved captures yet. Turn on history to keep editable screenshots on this Mac." : "\(entries.count) captures stored locally. Double-click to reopen and edit." }
         catch { note.stringValue = "History could not be read: \(error.localizedDescription)" }
     }
@@ -49,9 +51,15 @@ final class HistoryController: NSWindowController,NSTableViewDataSource,NSTableV
     }
     @objc private func openSelected() {
         guard entries.indices.contains(table.selectedRow) else { return }
-        let entry = entries[table.selectedRow]
-        do { let (image,state) = try store.load(entry);onOpen?(image,state,entry) }
-        catch { let alert = NSAlert(error:error);if let window { alert.beginSheetModal(for:window) } }
+        let entry = entries[table.selectedRow],store = store
+        note.stringValue = "Opening screenshot…"
+        loader.submit(work:{ _ in try store.load(entry) }) { [weak self] result in
+            guard let self,store.directory == AppSettings.shared.historyDirectory else { return }
+            switch result {
+            case .success(let (image,state)):self.onOpen?(image,state,entry);self.note.stringValue = "Screenshot opened"
+            case .failure(let error):let alert = NSAlert(error:error);if let window = self.window { alert.beginSheetModal(for:window) }
+            }
+        }
     }
     private func clearHistory() {
         let alert = NSAlert();alert.messageText = "Clear screenshot history?";alert.informativeText = "This removes saved captures and their editable state from Velinshot on this Mac. Exported files are kept."

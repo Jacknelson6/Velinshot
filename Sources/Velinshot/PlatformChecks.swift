@@ -67,6 +67,15 @@ enum PlatformChecks {
         try check(canvas.state.crop != nil,"crop gesture commits a source-space crop")
         try check((canvas.state.crop?.width ?? 0)>1 && (canvas.state.crop?.height ?? 0)>1,"crop gesture has positive source-pixel dimensions")
         try check(!canvas.state.style.autoBalance,"manual crop turns automatic balance off")
+        canvas.state = baseline;canvas.tool = .pen
+        var interruptedCommits = 0
+        canvas.onCommit = { _,_ in interruptedCommits += 1 }
+        canvas.mouseDown(with:try event(.leftMouseDown,start));canvas.mouseDragged(with:try event(.leftMouseDragged,end))
+        canvas.tool = .arrow
+        try check(interruptedCommits == 1 && canvas.state.annotations.count == 1,"changing tools commits an in-flight stroke once")
+        canvas.mouseUp(with:try event(.leftMouseUp,end))
+        try check(interruptedCommits == 1 && !canvas.hasActiveGesture,"a delayed mouse-up cannot duplicate the interrupted stroke")
+        canvas.onCommit = nil
         let arrow = Annotation(kind:.arrow,points:[CGPoint(x:0,y:0),CGPoint(x:100,y:100)])
         let resized = AnnotationGeometry.resize(arrow,from:CGRect(x:0,y:0,width:100,height:100),to:CGRect(x:20,y:30,width:200,height:150))
         try check(resized.points == [CGPoint(x:20,y:30),CGPoint(x:220,y:180)],"resize maps both arrow endpoints to the new box")
@@ -127,6 +136,7 @@ enum PlatformChecks {
         try check(editor.state.style.padding == 150,"integrated slider updates the visible style")
         editor.undoEdit()
         try check(editor.state.style.padding == oldPadding,"one undo restores an entire slider drag")
+        try check(preferences.style.padding == oldPadding,"undo restores next-document style defaults too")
         try check(editor.state.annotations.count == 1,"slider undo preserves earlier annotation history")
         editor.undoEdit();try check(editor.state.annotations.isEmpty,"earlier annotation undo survives the slider gesture")
         editor.redoEdit()
@@ -144,6 +154,15 @@ enum PlatformChecks {
         try check(editor.state.annotations.count == 1,"document undo removes the committed text mark")
         editor.redoEdit()
         try check(editor.state.annotations.count == 2,"document redo restores committed text")
+        editorCanvas.tool = .pen
+        editorCanvas.mouseDown(with:try editorEvent(.leftMouseDown,editorStart));editorCanvas.mouseDragged(with:try editorEvent(.leftMouseDragged,editorEnd))
+        try check(editor.state.annotations.count == 3,"a pending stroke appears before pointer release")
+        editor.undoEdit()
+        try check(editor.state.annotations.count == 2 && !editorCanvas.hasActiveGesture,"undo during a stroke cancels the draft without touching earlier history")
+        editorCanvas.mouseDragged(with:try editorEvent(.leftMouseDragged,editorEnd));editorCanvas.mouseUp(with:try editorEvent(.leftMouseUp,editorEnd))
+        try check(editor.state.annotations.count == 2,"late drag and mouse-up after undo preserve the document")
+        editor.undoEdit();try check(editor.state.annotations.count == 1,"canceling a pending stroke preserves the preceding text undo")
+        editor.redoEdit();try check(editor.state.annotations.count == 2,"earlier document redo survives gesture cancellation")
         let blockedHistory = directory.appendingPathComponent("not-a-history-directory")
         try Data("This file must be preserved".utf8).write(to:blockedHistory,options:.atomic)
         preferences.historyDirectory = blockedHistory;preferences.historyEnabled = true
@@ -151,6 +170,7 @@ enum PlatformChecks {
         try check(editor.state.annotations.count == 2,"history failure preserves the working document")
         preferences.historyEnabled = false;preferences.historyDirectory = firstHistory
         editor.close()
+        count += try ImageWorkChecks.run()
         print("\(count) platform integration checks passed in isolated settings and hidden native views.")
         return count
     }

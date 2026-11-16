@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var workspaceObservers:[NSObjectProtocol] = []
     private var closeObserver:NSObjectProtocol?
     private var pendingURLs:[URL] = []
+    private let importer = LatestImageWork<PreparedDocument>()
+    private var loadingTask:DispatchWorkItem?
+    private var loadingWindow:LoadingController?
     private var lastClosed:ClosedScreenshot?
     private var lastHistoryDirectory = AppSettings.shared.historyDirectory
     private var welcomeCapture:NSButton?
@@ -48,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         closeObserver = NotificationCenter.default.addObserver(forName:NSWindow.willCloseNotification,object:nil,queue:.main) { [weak self] _ in DispatchQueue.main.async { self?.updateDockPolicy() } }
         if CommandLine.arguments.contains("--demo") {
             do { present(try DemoFixture.make(),state:DemoFixture.style(),title:"Studio notes · Demo") } catch { showError(error) }
-        } else if !pendingURLs.isEmpty { pendingURLs.forEach(openURL);pendingURLs.removeAll() }
+        } else if !pendingURLs.isEmpty { openURLs(pendingURLs);pendingURLs.removeAll() }
         else if AppSettings.shared.showWelcome { showWelcome() }
         else { NSApp.setActivationPolicy(.accessory) }
     }
@@ -58,9 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return true
     }
     func application(_ application:NSApplication,open urls:[URL]) {
-        if statusItem == nil { pendingURLs.append(contentsOf:urls) } else { urls.forEach(openURL) }
+        if statusItem == nil { pendingURLs.append(contentsOf:urls) } else { openURLs(urls) }
     }
     func applicationWillTerminate(_ notification:Notification) {
+        importer.cancel();finishLoading()
         editors.forEach{$0.persistHistory()}
         if let settingsObserver { NotificationCenter.default.removeObserver(settingsObserver) }
         workspaceObservers.forEach{NSWorkspace.shared.notificationCenter.removeObserver($0)}
@@ -124,39 +128,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.center();welcome = NSWindowController(window:window);showWelcome()
     }
     private func takeCapture(quickCopy:Bool = false,display:Bool = false) {
+        if NSApp.modalWindow == nil,!capture.isCapturing { importer.cancel();finishLoading() }
         capture.begin(display ? .display : .area) { [weak self] result in
             switch result {
             case .success(let image):
-                if quickCopy {
-                    do {
-                        let state = NewDocument.state(source:image,style:AppSettings.shared.style)
-                        let background = Self.backgroundImage(for:state.style.backgroundAssetID)
-                        let output = try CanvasRenderer.render(source:image,state:state,backgroundImage:background)
-                        let board = NSPasteboard.general;board.clearContents()
-                        guard board.writeObjects([NSImage(cgImage:output,size:CGSize(width:output.width,height:output.height))]) else { throw VelinshotError.invalidImage("Clipboard is busy. Try again.") }
-                        var entry:HistoryEntry?
-                        var historyError:Error?
-                        if AppSettings.shared.historyEnabled {
-                            do { entry = try HistoryStore(directory:AppSettings.shared.historyDirectory).save(image:image,state:state) }
-                            catch { historyError = error }
-                        }
-                        self?.lastClosed = ClosedScreenshot(image:image,state:state,title:"Screenshot",historyEntry:entry,historyDirectory:AppSettings.shared.historyDirectory)
-                        if AppSettings.shared.sound { NSSound(named:"Pop")?.play() }
-                        if let historyError {
-                            let alert = NSAlert();alert.messageText = "Copied, but history was not saved";alert.informativeText = historyError.localizedDescription+" Choose another history folder in Settings. You can still reopen the screenshot from File → Reopen Closed Screenshot."
-                            alert.runModal()
-                        }
-                    } catch { self?.showError(error) }
-                } else { self?.present(image) }
+                self?.prepareImages([(.image(image),nil,"Screenshot")],quickCopy:quickCopy)
             case .failure(let error):
                 if let failure = error as? CaptureFailure,case .cancelled = failure { return }
                 self?.showCaptureError(error)
             }
         }
     }
-    private func present(_ image:CGImage,state:EditState? = nil,title:String = "Screenshot",historyEntry:HistoryEntry? = nil) {
+    private func present(_ image:CGImage,state:EditState? = nil,title:String = "Screenshot",historyEntry:HistoryEntry? = nil,preparedPreview:ImagePreview? = nil,preparedAnalysis:DocumentAnalysis = DocumentAnalysis()) {
+        guard let preparedPreview else { prepareImages([(.image(image),state,title)],historyEntry:historyEntry);return }
+
         welcome?.window?.orderOut(nil)
-        let editor = EditorController(source:image,state:state,title:title)
+        let editor = EditorController(source:image,state:state,title:title,preparedPreview:preparedPreview,preparedAnalysis:preparedAnalysis)
         editor.historyEntry = historyEntry
         editor.onClose = { [weak self,weak editor] in
             if let editor { self?.lastClosed = ClosedScreenshot(image:editor.source,state:editor.state,title:editor.window?.title ?? "Screenshot",historyEntry:editor.historyEntry,historyDirectory:AppSettings.shared.historyDirectory) }
@@ -169,9 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         editor.onSettings = { [weak self] in self?.showSettings() }
         editor.onHistory = { [weak self] in self?.showHistory() }
         editor.onImportURL = { [weak self] in self?.openURL($0) }
-        editor.onImportData = { [weak self] data in
-            do { self?.present(try ImageLoader.load(data:data)) } catch { self?.showError(error) }
-        }
+        editor.onImportData = { [weak self] data in self?.prepareImages([(.encoded(data),nil,"Screenshot")]) }
         editors.append(editor);editor.showWindow(nil);editor.persistHistory()
     }
     private func updateDockPolicy() {
@@ -195,17 +180,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard let id,UUID(uuidString:id) != nil else { return nil }
         return try? ImageLoader.load(url:AppSettings.supportDirectory.appendingPathComponent("Backgrounds",isDirectory:true).appendingPathComponent(id+".png"))
     }
-    private func openURL(_ url:URL) { do { present(try ImageLoader.load(url:url),title:url.lastPathComponent) } catch { showError(error) } }
+    private func openURL(_ url:URL) { openURLs([url]) }
+    private func openURLs(_ urls:[URL]) { prepareImages(urls.map{(.file($0),nil,$0.lastPathComponent)}) }
+    private func prepareImages(_ requests:[(ImageInput,EditState?,String)],historyEntry:HistoryEntry? = nil,quickCopy:Bool = false) {
+        guard !requests.isEmpty else { return }
+        finishLoading()
+        let style = AppSettings.shared.style,historyDirectory = AppSettings.shared.historyDirectory
+        importer.submitBatch(requests.map { input,state,title in { ticket in
+            try DocumentPreparation.prepare(input,style:style,state:state,title:title,quickCopy:quickCopy,ticket:ticket)
+        } }) { [weak self] result in
+            guard let self else { return }
+            if !self.importer.isBusy { self.finishLoading() }
+            switch result {
+            case .success(let prepared):
+                if quickCopy { self.copyPrepared(prepared) }
+                else {
+                    let entry = historyDirectory == AppSettings.shared.historyDirectory ? historyEntry : nil
+                    self.present(prepared.source,state:prepared.state,title:prepared.title,historyEntry:entry,preparedPreview:prepared.preview,preparedAnalysis:prepared.analysis)
+                }
+            case .failure(let error):self.showError(error)
+            }
+        }
+        // A one-shot delayed surface avoids flashing a window for small files.
+        let task = DispatchWorkItem { [weak self] in
+            guard let self,self.importer.isBusy else { return }
+            let controller = LoadingController(title:requests.count == 1 ? requests[0].2 : "\(requests.count) images")
+            controller.onCancel = { [weak self] in self?.importer.cancel();self?.finishLoading() }
+            self.loadingWindow = controller;controller.showWindow(nil)
+        }
+        loadingTask = task;DispatchQueue.main.asyncAfter(deadline:.now()+0.12,execute:task)
+    }
+    private func finishLoading() { loadingTask?.cancel();loadingTask = nil;loadingWindow?.close();loadingWindow = nil }
+    private func copyPrepared(_ prepared:PreparedDocument) {
+        guard let output = prepared.quickCopyOutput else { return }
+        let board = NSPasteboard.general;board.clearContents()
+        guard board.writeObjects([NSImage(cgImage:output,size:CGSize(width:output.width,height:output.height))]) else { showError(VelinshotError.invalidImage("Clipboard is busy. Try again."));return }
+        var entry:HistoryEntry?,historyError:Error?
+        if AppSettings.shared.historyEnabled {
+            do { entry = try HistoryStore(directory:AppSettings.shared.historyDirectory).save(image:prepared.source,state:prepared.state) }
+            catch { historyError = error }
+        }
+        lastClosed = ClosedScreenshot(image:prepared.source,state:prepared.state,title:prepared.title,historyEntry:entry,historyDirectory:AppSettings.shared.historyDirectory)
+        if AppSettings.shared.sound { NSSound(named:"Pop")?.play() }
+        if let historyError {
+            let alert = NSAlert();alert.messageText = "Copied, but history was not saved";alert.informativeText = historyError.localizedDescription+" Choose another history folder in Settings. You can still reopen the screenshot from File → Reopen Closed Screenshot.";alert.runModal()
+        }
+    }
     @objc func newCapture() { takeCapture() }
     @objc func quickCapture() { takeCapture(quickCopy:true) }
     @objc func captureDisplay() { takeCapture(display:true) }
     @objc func openImage() {
         let panel = NSOpenPanel();panel.allowedContentTypes = [.image];panel.canChooseDirectories = false;panel.allowsMultipleSelection = true
-        if panel.runModal() == .OK { panel.urls.forEach(openURL) }
+        if panel.runModal() == .OK { openURLs(panel.urls) }
     }
     @objc func openClipboard() {
         let board = NSPasteboard.general
-        if let data = board.data(forType:.png) ?? board.data(forType:.tiff) { do { present(try ImageLoader.load(data:data)) } catch { showError(error) };return }
+        if let data = board.data(forType:.png) ?? board.data(forType:.tiff) { prepareImages([(.encoded(data),nil,"Screenshot")]);return }
         if let urls = board.readObjects(forClasses:[NSURL.self],options:[.urlReadingFileURLsOnly:true]) as? [URL],let url = urls.first { openURL(url);return }
         let alert = NSAlert();alert.messageText = "No image on the clipboard";alert.informativeText = "Copy an image first, or choose Open Image to edit a file.";alert.runModal()
     }

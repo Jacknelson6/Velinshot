@@ -37,6 +37,14 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private var ratioPicker = NSPopUpButton()
     private var scalePicker = NSPopUpButton()
     private var presetPicker = NSPopUpButton()
+    private var inspectorPages:[NSView] = []
+    private var inspectorTabs:NSSegmentedControl?
+    private weak var inspectorScroll:NSScrollView?
+    private var annotationWidth:NSSegmentedControl?
+    private var annotationFont:NSPopUpButton?
+    private weak var markupSection:NSView?
+    private var undoButton:NSButton?
+    private var redoButton:NSButton?
     private var firstColor = NSColorWell()
     private var secondColor = NSColorWell()
     private var insetColor = NSColorWell()
@@ -61,13 +69,19 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private var inspectorGestureBefore:EditState?
     private var watermarkGestureBefore:EditState?
     private var historyFailure:String?
+    private var analysis:DocumentAnalysis
+    private let analysisWork = LatestImageWork<DocumentAnalysis>()
+    private let backgroundWork = LatestImageWork<(CGImage,String)>()
+    private var loadedBackgroundID:String?
+    private var pendingBackgroundID:String?
 
-    init(source: CGImage, state: EditState? = nil, title: String = "Screenshot", preferences:AppSettings = .shared, supportDirectory:URL = AppSettings.supportDirectory) {
+    init(source: CGImage, state: EditState? = nil, title: String = "Screenshot", preparedPreview:ImagePreview? = nil, preparedAnalysis:DocumentAnalysis = DocumentAnalysis(), preferences:AppSettings = .shared, supportDirectory:URL = AppSettings.supportDirectory) {
         self.preferences = preferences;self.supportDirectory = supportDirectory
+        self.analysis = preparedAnalysis
         self.presetStore = PresetStore(fileURL:supportDirectory.appendingPathComponent("presets.json"))
         self.source = source
         let initial = state ?? NewDocument.state(source:source,style:preferences.style)
-        canvas = CanvasView(source:source,state:initial)
+        canvas = CanvasView(source:source,state:initial,preparedPreview:preparedPreview)
         let visible = NSScreen.main?.visibleFrame ?? CGRect(x:0,y:0,width:1200,height:800)
         let size = CGSize(width:min(950,visible.width-32),height:min(650,visible.height-32))
         let window = EditorWindow(contentRect:CGRect(origin:.zero,size:size),styleMask:[.titled,.closable,.miniaturizable,.resizable,.fullSizeContentView],backing:.buffered,defer:false)
@@ -91,9 +105,13 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         canvas.onKey = { [weak self] in self?.handleKey($0) ?? false }
         canvas.onTextEditingChange = { [weak self] active in self?.textEditingActive = active;self?.fieldUndo.removeAllActions() }
         canvas.onSelection = { [weak self] annotation in
-            guard let self,let annotation else { return }
+            guard let self else { return }
+            self.markupSection?.isHidden = annotation == nil && [.select,.crop].contains(self.canvas.tool)
+            guard let annotation else { return }
             self.annotationColorWell.color = annotation.color.nsColor
             self.canvas.annotationColor = annotation.color;self.canvas.lineWidth = annotation.lineWidth;self.canvas.fontSize = annotation.fontSize
+            self.annotationWidth?.selectedSegment = [3.0,6,12].firstIndex(of:annotation.lineWidth) ?? -1
+            self.annotationFont?.selectItem(at:[24.0,36,48,72,96].firstIndex(of:annotation.fontSize) ?? 1)
         }
         loadBackground()
         loadPresets()
@@ -116,149 +134,166 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         return editorUndo
     }
     func windowWillClose(_ notification: Notification) {
-        canvas.finishText()
+        canvas.finishText();canvas.finishPointerGesture()
         persistHistory()
         userIsClosing = true
+        analysisWork.cancel();backgroundWork.cancel()
         infoWindow?.close()
         onClose?()
     }
+    func windowDidResignKey(_ notification:Notification) { canvas.finishPointerGesture() }
     private func buildInterface() {
         guard let root = window?.contentView else { return }
-        root.wantsLayer = true
-        let header = NSView(); let content = NSView();let footer = NSView()
+        let header = StudioSurface();let content = NSView();let footer = StudioSurface()
         for view in [header,content,footer] { root.addSubview(view);view.translatesAutoresizingMaskIntoConstraints = false }
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo:root.topAnchor),header.leadingAnchor.constraint(equalTo:root.leadingAnchor),header.trailingAnchor.constraint(equalTo:root.trailingAnchor),header.heightAnchor.constraint(equalToConstant:52),
+            header.topAnchor.constraint(equalTo:root.topAnchor),header.leadingAnchor.constraint(equalTo:root.leadingAnchor),header.trailingAnchor.constraint(equalTo:root.trailingAnchor),header.heightAnchor.constraint(equalToConstant:56),
             content.topAnchor.constraint(equalTo:header.bottomAnchor),content.leadingAnchor.constraint(equalTo:root.leadingAnchor),content.trailingAnchor.constraint(equalTo:root.trailingAnchor),
-            footer.topAnchor.constraint(equalTo:content.bottomAnchor),footer.bottomAnchor.constraint(equalTo:root.bottomAnchor),footer.leadingAnchor.constraint(equalTo:root.leadingAnchor),footer.trailingAnchor.constraint(equalTo:root.trailingAnchor),footer.heightAnchor.constraint(equalToConstant:54)
+            footer.topAnchor.constraint(equalTo:content.bottomAnchor),footer.bottomAnchor.constraint(equalTo:root.bottomAnchor),footer.leadingAnchor.constraint(equalTo:root.leadingAnchor),footer.trailingAnchor.constraint(equalTo:root.trailingAnchor),footer.heightAnchor.constraint(equalToConstant:58)
         ])
         let title = Brand.label("Velinshot",size:13,weight:.semibold)
+        let documentTitle = Brand.label(window?.title ?? "Screenshot",size:10.5)
+        documentTitle.textColor = .secondaryLabelColor;documentTitle.lineBreakMode = .byTruncatingMiddle
+        documentTitle.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
+        let titleGroup = NSStackView(views:[title,documentTitle]);titleGroup.orientation = .vertical;titleGroup.alignment = .leading;titleGroup.spacing = 1
         let icon = NSImageView(image:NSImage(named:NSImage.Name("AppIcon")) ?? Brand.symbol("viewfinder")!)
-        icon.translatesAutoresizingMaskIntoConstraints = false;icon.widthAnchor.constraint(equalToConstant:23).isActive = true;icon.heightAnchor.constraint(equalToConstant:23).isActive = true
-        let capture = ActionButton(title:"",symbol:"viewfinder") { [weak self] in self?.onCapture?() };capture.toolTip = "New capture"
-        let open = ActionButton(title:"",symbol:"folder") { [weak self] in self?.onOpen?() };open.toolTip = "Open image (⌘O)"
-        let paste = ActionButton(title:"",symbol:"clipboard") { [weak self] in self?.onPaste?() };paste.toolTip = "Open image from clipboard (⌘V)"
-        let undo = ActionButton(title:"",symbol:"arrow.uturn.backward") { [weak self] in self?.undoEdit() };undo.toolTip = "Undo (⌘Z)"
-        let redo = ActionButton(title:"",symbol:"arrow.uturn.forward") { [weak self] in self?.redoEdit() };redo.toolTip = "Redo (⇧⌘Z)"
-        ocrButton = ActionButton(title:"",symbol:"text.viewfinder") { [weak self] in self?.recognizeText() };ocrButton.toolTip = "Select and copy text from this image"
-        let history = ActionButton(title:"",symbol:"clock.arrow.circlepath") { [weak self] in self?.onHistory?() };history.toolTip = "Screenshot history"
-        let settings = ActionButton(title:"",symbol:"slider.horizontal.3") { [weak self] in self?.onSettings?() };settings.toolTip = "Settings"
-        let fit = ActionButton(title:"Fit") { [weak self] in self?.canvas.fit() };fit.toolTip = "Fit image to preview"
+        icon.translatesAutoresizingMaskIntoConstraints = false;icon.widthAnchor.constraint(equalToConstant:27).isActive = true;icon.heightAnchor.constraint(equalToConstant:27).isActive = true
+        let undo = StudioButton(symbol:"arrow.uturn.backward") { [weak self] in self?.undoEdit() };undo.toolTip = "Undo (⌘Z)";undoButton = undo
+        let redo = StudioButton(symbol:"arrow.uturn.forward") { [weak self] in self?.redoEdit() };redo.toolTip = "Redo (⇧⌘Z)";redoButton = redo
+        let fit = StudioButton("Fit",symbol:"arrow.up.left.and.arrow.down.right") { [weak self] in self?.canvas.fit() };fit.toolTip = "Fit to preview (⌘0)"
+        ocrButton = StudioButton("Text",symbol:"text.viewfinder") { [weak self] in self?.recognizeText() };ocrButton.toolTip = "Select and copy image text"
+        let capture = StudioButton("Capture",symbol:"viewfinder") { [weak self] in self?.onCapture?() };capture.toolTip = "New capture"
+        let more = StudioButton(symbol:"ellipsis") {};more.actionHandler = { [weak self,weak more] in if let more { self?.showMore(more) } };more.toolTip = "Open, history and settings"
         let spacer = NSView();spacer.setContentHuggingPriority(.defaultLow,for:.horizontal)
-        let headerStack = NSStackView(views:[icon,title,spacer,undo,redo,fit,ocrButton,history,capture,open,paste,settings])
-        headerStack.orientation = .horizontal;headerStack.spacing = 8;headerStack.alignment = .centerY
+        let headerStack = NSStackView(views:[icon,titleGroup,spacer,undo,redo,fit,ocrButton,capture,more]);headerStack.spacing = 7;headerStack.alignment = .centerY
         header.addSubview(headerStack);headerStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([headerStack.leadingAnchor.constraint(equalTo:header.leadingAnchor,constant:80),headerStack.trailingAnchor.constraint(equalTo:header.trailingAnchor,constant:-14),headerStack.centerYAnchor.constraint(equalTo:header.centerYAnchor)])
-        for button in [capture,open,paste,undo,redo,ocrButton!,history,settings] { button.isBordered = false;button.widthAnchor.constraint(equalToConstant:25).isActive = true;button.setAccessibilityLabel(button.toolTip) }
+        for button in [undo,redo,more] { button.widthAnchor.constraint(equalToConstant:34).isActive = true;button.setAccessibilityLabel(button.toolTip) }
+        capture.setAccessibilityLabel("New capture");fit.setAccessibilityLabel("Fit image to preview");ocrButton.setAccessibilityLabel("Select and copy image text")
 
-        let rail = NSView();rail.wantsLayer = true
+        let rail = StudioSurface()
         let inspector = buildInspector()
         for view in [rail,canvas,inspector] { content.addSubview(view);view.translatesAutoresizingMaskIntoConstraints = false }
         NSLayoutConstraint.activate([
-            rail.leadingAnchor.constraint(equalTo:content.leadingAnchor),rail.topAnchor.constraint(equalTo:content.topAnchor),rail.bottomAnchor.constraint(equalTo:content.bottomAnchor),rail.widthAnchor.constraint(equalToConstant:50),
-            inspector.trailingAnchor.constraint(equalTo:content.trailingAnchor),inspector.topAnchor.constraint(equalTo:content.topAnchor),inspector.bottomAnchor.constraint(equalTo:content.bottomAnchor),inspector.widthAnchor.constraint(equalToConstant:238),
+            rail.leadingAnchor.constraint(equalTo:content.leadingAnchor),rail.topAnchor.constraint(equalTo:content.topAnchor),rail.bottomAnchor.constraint(equalTo:content.bottomAnchor),rail.widthAnchor.constraint(equalToConstant:58),
+            inspector.trailingAnchor.constraint(equalTo:content.trailingAnchor),inspector.topAnchor.constraint(equalTo:content.topAnchor),inspector.bottomAnchor.constraint(equalTo:content.bottomAnchor),inspector.widthAnchor.constraint(equalToConstant:250),
             canvas.leadingAnchor.constraint(equalTo:rail.trailingAnchor),canvas.trailingAnchor.constraint(equalTo:inspector.leadingAnchor),canvas.topAnchor.constraint(equalTo:content.topAnchor),canvas.bottomAnchor.constraint(equalTo:content.bottomAnchor)
         ])
         let tools = NSStackView();tools.orientation = .vertical;tools.spacing = 3
         rail.addSubview(tools);tools.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([tools.topAnchor.constraint(equalTo:rail.topAnchor,constant:8),tools.centerXAnchor.constraint(equalTo:rail.centerXAnchor)])
-        for tool in EditorTool.allCases {
-            let button = ActionButton(title:"",symbol:tool.symbol) { [weak self] in self?.setTool(tool) }
-            button.toolTip = tool.title;button.setAccessibilityLabel(tool.title)
-            button.setButtonType(.pushOnPushOff)
-            button.isBordered = false;button.wantsLayer = true;button.layer?.cornerRadius = 7
-            NSLayoutConstraint.activate([button.widthAnchor.constraint(equalToConstant:34),button.heightAnchor.constraint(equalToConstant:32)])
+        NSLayoutConstraint.activate([tools.topAnchor.constraint(equalTo:rail.topAnchor,constant:12),tools.centerXAnchor.constraint(equalTo:rail.centerXAnchor)])
+        let order:[EditorTool] = [.select,.pen,.arrow,.line,.rectangle,.ellipse,.text,.highlighter,.number,.blur,.redact,.crop]
+        for tool in order {
+            let button = StudioButton(symbol:tool.symbol,kind:.tool) { [weak self] in self?.setTool(tool) }
+            button.toolTip = tool.title;button.setAccessibilityLabel(tool.title);button.setButtonType(.pushOnPushOff)
+            button.widthAnchor.constraint(equalToConstant:38).isActive = true
             toolButtons[tool] = button;tools.addArrangedSubview(button)
         }
         setTool(.select)
-        addRule(to:root,yAnchor:header.bottomAnchor)
-        addRule(to:root,yAnchor:footer.topAnchor)
-        let copy = ActionButton(title:"Copy  C",symbol:"doc.on.doc") { [weak self] in self?.copyImage() }
-        copy.bezelColor = Brand.iris;copy.contentTintColor = .white;copy.setAccessibilityLabel("Copy screenshot")
-        copy.attributedTitle = NSAttributedString(string:"Copy  C",attributes:[.foregroundColor:NSColor.white,.font:NSFont.systemFont(ofSize:12,weight:.semibold)])
-        copy.image = copy.image?.withSymbolConfiguration(.init(paletteColors:[.white]))
-        let save = ActionButton(title:"Save…  S",symbol:"square.and.arrow.down") { [weak self] in self?.saveImage() };save.setAccessibilityLabel("Save screenshot")
+        let copy = StudioButton("Copy",symbol:"doc.on.doc",kind:.primary,shortcut:"C") { [weak self] in self?.copyImage() };copy.setAccessibilityLabel("Copy screenshot");copy.toolTip = "Copy and close (C or ⌘C)"
+        let save = StudioButton("Save",symbol:"square.and.arrow.down",kind:.secondary,shortcut:"S") { [weak self] in self?.saveImage() };save.setAccessibilityLabel("Save screenshot");save.toolTip = "Choose where to save (S or ⌘S)"
         let drag = DragExportButton();drag.imageProvider = { [weak self] in
             guard let self else { throw VelinshotError.renderingFailed };return try self.renderedImage()
-        };drag.onError = { [weak self] in self?.showError($0) }
-        let share = ActionButton(title:"",symbol:"square.and.arrow.up") {}
-        share.actionHandler = { [weak self,weak share] in if let share { self?.shareScreenshot(share) } }
-        share.toolTip = "Share finished screenshot";share.setAccessibilityLabel("Share screenshot")
-        let footerSpacer = NSView();footerSpacer.setContentHuggingPriority(.defaultLow,for:.horizontal)
-        dimensionsLabel.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);dimensionsLabel.textColor = .secondaryLabelColor
+        };drag.onError = { [weak self] in self?.showError($0) };drag.controlSize = .small
+        let share = StudioButton(symbol:"square.and.arrow.up") {}
+        share.actionHandler = { [weak self,weak share] in if let share { self?.shareScreenshot(share) } };share.toolTip = "Share finished screenshot";share.setAccessibilityLabel("Share screenshot");share.widthAnchor.constraint(equalToConstant:32).isActive = true
+        dimensionsLabel.font = .monospacedDigitSystemFont(ofSize:11,weight:.medium);dimensionsLabel.textColor = .labelColor
         statusLabel.textColor = .secondaryLabelColor;statusLabel.lineBreakMode = .byTruncatingTail;statusLabel.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
-        let bottom = NSStackView(views:[dimensionsLabel,statusLabel,footerSpacer,drag,share,save,copy]);bottom.spacing = 10;bottom.alignment = .centerY
+        let information = NSStackView(views:[dimensionsLabel,statusLabel]);information.orientation = .vertical;information.alignment = .leading;information.spacing = 3
+        let footerSpacer = NSView();footerSpacer.setContentHuggingPriority(.defaultLow,for:.horizontal)
+        let bottom = NSStackView(views:[information,footerSpacer,drag,share,save,copy]);bottom.spacing = 10;bottom.alignment = .centerY
         footer.addSubview(bottom);bottom.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([bottom.leadingAnchor.constraint(equalTo:footer.leadingAnchor,constant:16),bottom.trailingAnchor.constraint(equalTo:footer.trailingAnchor,constant:-16),bottom.centerYAnchor.constraint(equalTo:footer.centerYAnchor),copy.widthAnchor.constraint(equalToConstant:108),save.widthAnchor.constraint(equalToConstant:108)])
+        NSLayoutConstraint.activate([bottom.leadingAnchor.constraint(equalTo:footer.leadingAnchor,constant:18),bottom.trailingAnchor.constraint(equalTo:footer.trailingAnchor,constant:-16),bottom.centerYAnchor.constraint(equalTo:footer.centerYAnchor),copy.widthAnchor.constraint(equalToConstant:110),save.widthAnchor.constraint(equalToConstant:110)])
     }
-    private func addRule(to root: NSView,yAnchor:NSLayoutYAxisAnchor) {
-        let rule = NSBox();rule.boxType = .separator;root.addSubview(rule);rule.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([rule.leadingAnchor.constraint(equalTo:root.leadingAnchor),rule.trailingAnchor.constraint(equalTo:root.trailingAnchor),rule.topAnchor.constraint(equalTo:yAnchor),rule.heightAnchor.constraint(equalToConstant:1)])
+    private func showMore(_ sender:NSView) {
+        let menu = NSMenu()
+        let entries:[(String,Selector,String)] = [("Open Image…",#selector(requestOpen),"o"),("Open from Clipboard",#selector(requestPaste),"v"),("Screenshot History…",#selector(requestHistory),""),("Settings…",#selector(requestSettings),",")]
+        for (title,action,key) in entries { let item = NSMenuItem(title:title,action:action,keyEquivalent:key);item.target = self;menu.addItem(item) }
+        menu.popUp(positioning:nil,at:CGPoint(x:sender.bounds.maxX,y:sender.bounds.minY-5),in:sender)
     }
-    private func buildInspector() -> NSScrollView {
-        let scroll = NSScrollView();scroll.hasVerticalScroller = true;scroll.autohidesScrollers = true;scroll.drawsBackground = false
-        let document = FlippedView();scroll.documentView = document;document.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([document.widthAnchor.constraint(equalTo:scroll.contentView.widthAnchor)])
-        let stack = NSStackView();stack.orientation = .vertical;stack.alignment = .leading;stack.spacing = 14;stack.detachesHiddenViews = true
+    @objc private func requestOpen() { onOpen?() }
+    @objc private func requestPaste() { onPaste?() }
+    @objc private func requestHistory() { onHistory?() }
+    @objc private func requestSettings() { onSettings?() }
+    private func buildInspector() -> NSView {
+        let panel = StudioSurface()
+        let heading = Brand.label("Composition",size:15,weight:.semibold)
+        let tabs = NSSegmentedControl(labels:["Frame","Backdrop","Output"],trackingMode:.selectOne,target:self,action:#selector(inspectorTabChanged));tabs.selectedSegment = 0;tabs.controlSize = .regular;tabs.setAccessibilityLabel("Inspector section")
+        inspectorTabs = tabs
+        let top = NSStackView(views:[heading,tabs]);top.orientation = .vertical;top.alignment = .leading;top.spacing = 13
+        panel.addSubview(top);top.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = NSScrollView();scroll.hasVerticalScroller = true;scroll.autohidesScrollers = true;scroll.drawsBackground = false;scroll.borderType = .noBorder
+        panel.addSubview(scroll);scroll.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([top.leadingAnchor.constraint(equalTo:panel.leadingAnchor,constant:18),top.trailingAnchor.constraint(equalTo:panel.trailingAnchor,constant:-18),top.topAnchor.constraint(equalTo:panel.topAnchor,constant:20),tabs.widthAnchor.constraint(equalTo:top.widthAnchor),scroll.topAnchor.constraint(equalTo:top.bottomAnchor,constant:15),scroll.leadingAnchor.constraint(equalTo:panel.leadingAnchor),scroll.trailingAnchor.constraint(equalTo:panel.trailingAnchor),scroll.bottomAnchor.constraint(equalTo:panel.bottomAnchor)])
+        let document = FlippedView();scroll.documentView = document;document.translatesAutoresizingMaskIntoConstraints = false;document.widthAnchor.constraint(equalTo:scroll.contentView.widthAnchor).isActive = true
+        let stack = NSStackView();stack.orientation = .vertical;stack.alignment = .leading;stack.spacing = 18;stack.detachesHiddenViews = true
         document.addSubview(stack);stack.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo:document.leadingAnchor,constant:16),stack.trailingAnchor.constraint(equalTo:document.trailingAnchor,constant:-16),stack.topAnchor.constraint(equalTo:document.topAnchor,constant:18),stack.bottomAnchor.constraint(equalTo:document.bottomAnchor,constant:-18)])
-        func add(_ view:NSView) { stack.addArrangedSubview(view);view.translatesAutoresizingMaskIntoConstraints = false;view.widthAnchor.constraint(equalTo:stack.widthAnchor).isActive = true }
-        add(Brand.label("Frame",size:17,weight:.semibold))
-        backgroundPicker.addItems(withTitles:["Gradient","Solid color","Image","Transparent"]);backgroundPicker.target = self;backgroundPicker.action = #selector(backgroundChanged)
-        backgroundPicker.setAccessibilityLabel("Background type");add(backgroundPicker)
-        firstColor.target = self;firstColor.action = #selector(colorsChanged);secondColor.target = self;secondColor.action = #selector(colorsChanged)
-        firstColor.setAccessibilityLabel("First background color");secondColor.setAccessibilityLabel("Second background color")
-        let colors = NSStackView(views:[firstColor,secondColor]);colors.spacing = 8;colors.distribution = .fillEqually;add(colors)
-        for well in [firstColor,secondColor] { well.heightAnchor.constraint(equalToConstant:24).isActive = true }
-        let swatches = NSStackView();swatches.spacing = 7
+        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo:document.leadingAnchor,constant:18),stack.trailingAnchor.constraint(equalTo:document.trailingAnchor,constant:-18),stack.topAnchor.constraint(equalTo:document.topAnchor,constant:2),stack.bottomAnchor.constraint(equalTo:document.bottomAnchor,constant:-20)])
+        inspectorScroll = scroll
+        func add(_ view:NSView,to group:NSStackView) { group.addArrangedSubview(view);view.translatesAutoresizingMaskIntoConstraints = false;view.widthAnchor.constraint(equalTo:group.widthAnchor).isActive = true }
+        func group() -> NSStackView { let view = NSStackView();view.orientation = .vertical;view.alignment = .leading;view.spacing = 16;view.detachesHiddenViews = true;add(view,to:stack);return view }
+        let frame = group(),backdrop = group(),output = group();inspectorPages = [frame,backdrop,output];backdrop.isHidden = true;output.isHidden = true
+        add(sliderRow("Padding",key:"padding",min:0,max:240),to:frame)
+        add(sliderRow("Inset",key:"inset",min:0,max:160),to:frame)
+        insetColor.target = self;insetColor.action = #selector(insetColorChanged);insetColor.setAccessibilityLabel("Inset fill color")
+        add(colorRow("Inset fill",well:insetColor),to:frame)
+        add(sliderRow("Corners",key:"cornerRadius",min:0,max:100),to:frame)
+        add(sliderRow("Shadow",key:"shadow",min:0,max:100),to:frame)
+        add(sliderRow("Border",key:"borderWidth",min:0,max:12),to:frame)
+        add(separator(),to:frame)
+        balanceCheck = CheckButton(title:"Auto balance",value:canvas.state.style.autoBalance) { [weak self] enabled in self?.setAutomaticBalance(enabled) };add(balanceCheck,to:frame)
+        let reset = ActionButton(title:"Reset crop",symbol:"arrow.uturn.backward") { [weak self] in self?.change { $0.crop = nil;$0.style.autoBalance = false };self?.canvas.fit() };reset.controlSize = .small;add(reset,to:frame)
+
+        backgroundPicker.addItems(withTitles:["Gradient","Solid color","Image","Transparent"]);backgroundPicker.target = self;backgroundPicker.action = #selector(backgroundChanged);backgroundPicker.setAccessibilityLabel("Background type");add(backgroundPicker,to:backdrop)
+        let swatches = NSStackView();swatches.spacing = 9
         let combinations = [("Iris","#B7AEF8","#E6E3FF"),("Peach","#F5AF98","#F9E4BD"),("Ocean","#92C6E9","#C4E4DC"),("Ink","#292B3E","#54517B"),("Paper","#F1EEE6","#FBFAF7")]
         for (name,c1,c2) in combinations {
-            let button = ActionButton(title:"") { [weak self] in self?.change { $0.style.color1 = RGBA(hex:c1);$0.style.color2 = RGBA(hex:c2);$0.style.background = .gradient;$0.style.autoColor = false } }
-            button.isBordered = false;button.wantsLayer = true;button.layer?.backgroundColor = RGBA(hex:c1).nsColor.cgColor;button.layer?.cornerRadius = 10
-            button.toolTip = name;button.setAccessibilityLabel("\(name) gradient")
-            NSLayoutConstraint.activate([button.widthAnchor.constraint(equalToConstant:26),button.heightAnchor.constraint(equalToConstant:24)])
-            swatches.addArrangedSubview(button)
-        }
-        add(swatches)
-        let customBackground = ActionButton(title:"Choose image…",symbol:"photo") { [weak self] in self?.chooseBackground() };customBackground.toolTip = "Choose a custom background image";add(customBackground)
-        add(ActionButton(title:"Use desktop wallpaper",symbol:"desktopcomputer") { [weak self] in self?.useDesktopBackground() })
-        add(sliderRow("Padding",key:"padding",min:0,max:240))
-        add(sliderRow("Inset",key:"inset",min:0,max:160))
-        insetColor.target = self;insetColor.action = #selector(insetColorChanged);insetColor.setAccessibilityLabel("Inset fill color")
-        add(NSStackView(views:[Brand.label("Inset fill"),insetColor]))
-        add(sliderRow("Corners",key:"cornerRadius",min:0,max:100))
-        add(sliderRow("Shadow",key:"shadow",min:0,max:100))
-        add(sliderRow("Border",key:"borderWidth",min:0,max:12))
-        add(sliderRow("Gradient angle",key:"gradientAngle",min:0,max:360))
-        balanceCheck = CheckButton(title:"Auto balance",value:canvas.state.style.autoBalance) { [weak self] enabled in
-            guard let self else { return };let crop = enabled ? AutoBeautify.contentBounds(source:self.source) : nil
-            self.change{$0.style.autoBalance = enabled;$0.crop = crop};self.canvas.fit()
-        };add(balanceCheck)
-        autoColorCheck = CheckButton(title:"Match image colors",value:canvas.state.style.autoColor) { [weak self] enabled in
-            guard let self else { return };let colors = AutoBeautify.suggestColors(source:self.source)
-            self.change{$0.style.autoColor = enabled;if enabled {$0.style.color1 = colors.0;$0.style.color2 = colors.1;$0.style.background = .gradient}}
-        };add(autoColorCheck)
-        let balance = ActionButton(title:"Balance & color",symbol:"wand.and.stars") { [weak self] in self?.autoBeautify() };add(balance)
-        let resetCrop = ActionButton(title:"Reset crop",symbol:"arrow.uturn.backward") { [weak self] in self?.change { $0.crop = nil;$0.style.autoBalance = false };self?.canvas.fit() };add(resetCrop)
-        add(separator())
-        add(Brand.label("Canvas",size:13,weight:.semibold))
-        ratioPicker.addItems(withTitles:Self.ratios.map{$0.0}+["Custom ratio or size…"]+Self.sizes.map{$0.0})
-        ratioPicker.target = self;ratioPicker.action = #selector(ratioChanged);ratioPicker.setAccessibilityLabel("Canvas aspect ratio");add(ratioPicker)
-        scalePicker.addItems(withTitles:["1×  Original pixels","2×  Double pixels","½×  Smaller image","Set output width…"])
-        scalePicker.target = self;scalePicker.action = #selector(scaleChanged);scalePicker.setAccessibilityLabel("Output scale");add(scalePicker)
-        add(separator());add(Brand.label("Annotation",size:13,weight:.semibold))
-        annotationColorWell.color = canvas.annotationColor.nsColor;annotationColorWell.target = self;annotationColorWell.action = #selector(annotationColorChanged);annotationColorWell.setAccessibilityLabel("Annotation color");add(annotationColorWell)
-        let width = NSSegmentedControl(labels:["Thin","Medium","Bold"],trackingMode:.selectOne,target:self,action:#selector(widthChanged));width.selectedSegment = 1;add(width)
-        let fonts = NSPopUpButton();fonts.addItems(withTitles:["Text 24 px","Text 36 px","Text 48 px","Text 72 px","Text 96 px"]);fonts.selectItem(at:1);fonts.target = self;fonts.action = #selector(fontChanged);fonts.setAccessibilityLabel("Annotation text size");add(fonts)
-        add(separator());add(Brand.label("Watermark",size:13,weight:.semibold))
-        watermarkField.placeholderString = "Optional text (empty hides it)";watermarkField.delegate = self;watermarkField.setAccessibilityLabel("Optional watermark text");add(watermarkField)
-        watermarkPosition.addItems(withTitles:["Top left","Top right","Bottom left","Bottom right"]);watermarkPosition.target = self;watermarkPosition.action = #selector(watermarkPositionChanged);watermarkPosition.setAccessibilityLabel("Watermark position");add(watermarkPosition)
-        watermarkColor.target = self;watermarkColor.action = #selector(watermarkColorChanged);watermarkColor.setAccessibilityLabel("Watermark color");add(NSStackView(views:[Brand.label("Text color"),watermarkColor]))
-        add(separator());add(Brand.label("Presets",size:13,weight:.semibold))
-        presetPicker.target = self;presetPicker.action = #selector(presetChanged);presetPicker.setAccessibilityLabel("Saved frame preset");add(presetPicker)
-        let savePreset = ActionButton(title:"Save current style…",symbol:"plus") { [weak self] in self?.savePreset() };add(savePreset)
-        let deletePreset = ActionButton(title:"Delete selected preset",symbol:"minus") { [weak self] in self?.deletePreset() };add(deletePreset)
-        return scroll
+            swatches.addArrangedSubview(GradientSwatch(name:name,first:RGBA(hex:c1).nsColor,second:RGBA(hex:c2).nsColor) { [weak self] in self?.change { $0.style.color1 = RGBA(hex:c1);$0.style.color2 = RGBA(hex:c2);$0.style.background = .gradient;$0.style.autoColor = false } })
+        };add(swatches,to:backdrop)
+        for well in [firstColor,secondColor] { well.target = self;well.action = #selector(colorsChanged) }
+        firstColor.setAccessibilityLabel("First background color");secondColor.setAccessibilityLabel("Second background color")
+        add(colorRow("First color",well:firstColor),to:backdrop);add(colorRow("Second color",well:secondColor),to:backdrop)
+        add(sliderRow("Gradient angle",key:"gradientAngle",min:0,max:360),to:backdrop)
+        add(separator(),to:backdrop)
+        add(ActionButton(title:"Choose background image…",symbol:"photo") { [weak self] in self?.chooseBackground() },to:backdrop)
+        add(ActionButton(title:"Use desktop wallpaper",symbol:"desktopcomputer") { [weak self] in self?.useDesktopBackground() },to:backdrop)
+        autoColorCheck = CheckButton(title:"Match image colors",value:canvas.state.style.autoColor) { [weak self] enabled in self?.setAutomaticColors(enabled) };add(autoColorCheck,to:backdrop)
+        add(ActionButton(title:"Balance & match",symbol:"wand.and.stars") { [weak self] in self?.autoBeautify() },to:backdrop)
+
+        add(Brand.label("CANVAS",size:10,weight:.semibold),to:output)
+        ratioPicker.addItems(withTitles:Self.ratios.map{$0.0}+["Custom ratio or size…"]+Self.sizes.map{$0.0});ratioPicker.target = self;ratioPicker.action = #selector(ratioChanged);ratioPicker.setAccessibilityLabel("Canvas aspect ratio");add(ratioPicker,to:output)
+        scalePicker.addItems(withTitles:["1×  Original pixels","2×  Double pixels","½×  Smaller image","Set output width…"]);scalePicker.target = self;scalePicker.action = #selector(scaleChanged);scalePicker.setAccessibilityLabel("Output scale");add(scalePicker,to:output)
+        add(separator(),to:output);add(Brand.label("WATERMARK",size:10,weight:.semibold),to:output)
+        watermarkField.placeholderString = "Optional text";watermarkField.delegate = self;watermarkField.setAccessibilityLabel("Optional watermark text");add(watermarkField,to:output)
+        watermarkPosition.addItems(withTitles:["Top left","Top right","Bottom left","Bottom right"]);watermarkPosition.target = self;watermarkPosition.action = #selector(watermarkPositionChanged);watermarkPosition.setAccessibilityLabel("Watermark position");add(watermarkPosition,to:output)
+        watermarkColor.target = self;watermarkColor.action = #selector(watermarkColorChanged);watermarkColor.setAccessibilityLabel("Watermark color");add(colorRow("Text color",well:watermarkColor),to:output)
+        add(separator(),to:output);add(Brand.label("SAVED STYLES",size:10,weight:.semibold),to:output)
+        presetPicker.target = self;presetPicker.action = #selector(presetChanged);presetPicker.setAccessibilityLabel("Saved frame preset");add(presetPicker,to:output)
+        add(ActionButton(title:"Save current style…",symbol:"plus") { [weak self] in self?.savePreset() },to:output)
+        add(ActionButton(title:"Delete selected preset",symbol:"minus") { [weak self] in self?.deletePreset() },to:output)
+
+        let annotation = NSStackView();annotation.orientation = .vertical;annotation.alignment = .leading;annotation.spacing = 12
+        add(separator(),to:annotation);add(Brand.label("MARKUP",size:10,weight:.semibold),to:annotation)
+        annotationColorWell.color = canvas.annotationColor.nsColor;annotationColorWell.target = self;annotationColorWell.action = #selector(annotationColorChanged);annotationColorWell.setAccessibilityLabel("Annotation color");add(colorRow("Color",well:annotationColorWell),to:annotation)
+        let width = NSSegmentedControl(labels:["Thin","Medium","Bold"],trackingMode:.selectOne,target:self,action:#selector(widthChanged));width.selectedSegment = 1;width.setAccessibilityLabel("Annotation stroke width");annotationWidth = width;add(width,to:annotation)
+        let fonts = NSPopUpButton();fonts.addItems(withTitles:["Text 24 px","Text 36 px","Text 48 px","Text 72 px","Text 96 px"]);fonts.selectItem(at:1);fonts.target = self;fonts.action = #selector(fontChanged);fonts.setAccessibilityLabel("Annotation text size");annotationFont = fonts;add(fonts,to:annotation)
+        add(annotation,to:stack);stack.removeArrangedSubview(annotation);stack.insertArrangedSubview(annotation,at:0)
+        markupSection = annotation;annotation.isHidden = true
+        return panel
+    }
+    private func colorRow(_ title:String,well:NSColorWell) -> NSView {
+        well.controlSize = .small;well.colorWellStyle = .minimal
+        well.widthAnchor.constraint(equalToConstant:42).isActive = true;well.heightAnchor.constraint(equalToConstant:24).isActive = true
+        let row = NSStackView(views:[Brand.label(title),NSView(),well]);row.alignment = .centerY;return row
+    }
+    @objc private func inspectorTabChanged(_ tabs:NSSegmentedControl) {
+        window?.makeFirstResponder(canvas)
+        for (index,page) in inspectorPages.enumerated() { page.isHidden = index != tabs.selectedSegment }
+        if let scroll = inspectorScroll { scroll.contentView.scroll(to:.zero);scroll.reflectScrolledClipView(scroll.contentView) }
+    }
+    func showInspectorSection(_ index:Int) {
+        guard (0..<inspectorPages.count).contains(index),let tabs = inspectorTabs else { return }
+        tabs.selectedSegment = index;inspectorTabChanged(tabs)
     }
     private func separator() -> NSView { let box = NSBox();box.boxType = .separator;return box }
     private func sliderRow(_ title:String,key:String,min:Double,max:Double) -> NSView {
@@ -276,12 +311,13 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         top.widthAnchor.constraint(equalTo:group.widthAnchor).isActive = true;slider.widthAnchor.constraint(equalTo:group.widthAnchor).isActive = true
         return group
     }
-    private func setTool(_ tool:EditorTool) {
-        canvas.finishText();canvas.tool = tool
+    func setTool(_ tool:EditorTool) {
+        canvas.finishText();canvas.finishPointerGesture();canvas.tool = tool
+        markupSection?.isHidden = [.select,.crop].contains(tool)
+        if let scroll = inspectorScroll { scroll.contentView.scroll(to:.zero);scroll.reflectScrolledClipView(scroll.contentView) }
         for (kind,button) in toolButtons {
             button.state = kind == tool ? .on : .off
-            button.layer?.backgroundColor = (kind == tool ? Brand.iris.withAlphaComponent(0.13) : .clear).cgColor
-            button.contentTintColor = kind == tool ? Brand.iris : .secondaryLabelColor
+            button.needsDisplay = true
         }
         window?.makeFirstResponder(canvas)
         setStatus(tool.title)
@@ -296,20 +332,21 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private func restore(_ state:EditState) {
         let previous = canvas.state
         editorUndo.registerUndo(withTarget:self) { target in target.restore(previous) }
-        canvas.state = state;canvas.clearSelection();loadBackground();syncInspector()
+        canvas.state = state;preferences.style = state.style;canvas.clearSelection();loadBackground();syncInspector()
     }
     private func change(_ mutation:(inout EditState)->Void) {
-        canvas.finishText()
+        canvas.finishText();canvas.finishPointerGesture()
         let before = canvas.state;var after = before;mutation(&after)
         do { _ = try CanvasRenderer.layout(sourceSize:CGSize(width:source.width,height:source.height),state:after) }
         catch { setStatus(error.localizedDescription,error:true);return }
         canvas.state = after
         if inspectorGestureBefore == nil && watermarkGestureBefore == nil { commit(before:before,after:after) } else { syncInspector() }
     }
-    func undoEdit() { canvas.finishText();editorUndo.undo();syncInspector() }
-    func redoEdit() { canvas.finishText();editorUndo.redo();syncInspector() }
+    func undoEdit() { canvas.finishText();if !canvas.cancelPointerGesture() { editorUndo.undo() };syncInspector() }
+    func redoEdit() { canvas.finishText();if !canvas.cancelPointerGesture() { editorUndo.redo() };syncInspector() }
     private func syncInspector() {
         let style = canvas.state.style
+        undoButton?.isEnabled = editorUndo.canUndo;redoButton?.isEnabled = editorUndo.canRedo
         let values = ["padding":style.padding,"inset":style.inset,"cornerRadius":style.cornerRadius,"shadow":style.shadow,"borderWidth":style.borderWidth,"gradientAngle":style.gradientAngle]
         for (key,value) in values { sliders[key]?.doubleValue = value;valueLabels[key]?.stringValue = "\(Int(value))\(key == "gradientAngle" ? "°" : " px")" }
         backgroundPicker.selectItem(at:[BackgroundKind.gradient,.solid,.image,.transparent].firstIndex(of:style.background) ?? 0)
@@ -388,39 +425,90 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         guard let input = ask("Output width",message:"Enter the final width in pixels. Height follows the canvas ratio.",placeholder:"1920"),let width = Double(input),width.isFinite,width>0,let layout = try? CanvasRenderer.layout(sourceSize:CGSize(width:source.width,height:source.height),state:canvas.state) else { syncInspector();return }
         guard width<=16384 else { syncInspector();return };setFixedSize(width:Int(width.rounded()),height:max(1,Int((width/layout.canvasSize.width*layout.canvasSize.height).rounded())))
     }
-    private func autoBeautify() {
-        let colors = AutoBeautify.suggestColors(source:source)
-        let crop = AutoBeautify.contentBounds(source:source)
-        change{$0.style.color1 = colors.0;$0.style.color2 = colors.1;$0.style.background = .gradient;$0.crop = crop;$0.style.autoBalance = true;$0.style.autoColor = true}
-        canvas.fit();setStatus("Balanced and matched to your image")
+    private func setAutomaticBalance(_ enabled:Bool) {
+        if enabled { requestAnalysis(balance:true,colors:false) }
+        else { analysisWork.cancel();change{$0.style.autoBalance = false;$0.crop = nil};canvas.fit() }
+    }
+    private func setAutomaticColors(_ enabled:Bool) {
+        if enabled { requestAnalysis(balance:false,colors:true) }
+        else { analysisWork.cancel();change{$0.style.autoColor = false} }
+    }
+    private func autoBeautify() { requestAnalysis(balance:true,colors:true) }
+    private func requestAnalysis(balance:Bool,colors:Bool) {
+        window?.makeFirstResponder(canvas);canvas.finishText()
+        let before = canvas.state,source = source,cached = analysis
+        setStatus(balance ? "Balancing your image…" : "Matching image colors…")
+        analysisWork.submit(work:{ ticket in
+            var result = cached
+            if balance,result.bounds == nil { result.bounds = KnownContentBounds(bounds:AutoBeautify.contentBounds(source:source)) }
+            try ticket.checkpoint()
+            if colors,result.colors == nil { result.colors = AutoBeautify.suggestColors(source:source) }
+            return result
+        }) { [weak self] result in
+            guard let self,!self.userIsClosing else { return }
+            switch result {
+            case .success(let value):
+                self.analysis = value
+                guard self.canvas.state == before,!self.canvas.hasActiveGesture else { self.syncInspector();self.setStatus("Image changed. Choose balance again when ready.");return }
+                self.change {
+                    if balance { $0.crop = value.bounds?.bounds;$0.style.autoBalance = true }
+                    if colors,let pair = value.colors { $0.style.color1 = pair.0;$0.style.color2 = pair.1;$0.style.background = .gradient;$0.style.autoColor = true }
+                }
+                self.canvas.fit();self.setStatus(balance && colors ? "Balanced and matched to your image" : balance ? "Image balanced" : "Colors matched")
+            case .failure(let error):self.syncInspector();self.showError(error)
+            }
+        }
     }
     private func chooseBackground() {
         let panel = NSOpenPanel();panel.allowedContentTypes = [.image];panel.canChooseDirectories = false
         guard panel.runModal() == .OK,let url = panel.url else { return }
-        do {
-            try setBackground(url:url)
-        } catch { showError(error) }
+        setBackground(url:url)
     }
-    private func setBackground(url:URL) throws {
-            let image = try ImageLoader.load(url:url)
-            let data = try ImageExporter.data(image:image,format:.png)
-            let directory = supportDirectory.appendingPathComponent("Backgrounds",isDirectory:true)
+    private func setBackground(url:URL,wallpaper:Bool = false) {
+        let directory = supportDirectory.appendingPathComponent("Backgrounds",isDirectory:true),before = canvas.state.style
+        setStatus("Opening background…")
+        pendingBackgroundID = nil
+        backgroundWork.submit(work:{ ticket in
+            let image = try ImageLoader.open(url:url).fullResolution();try ticket.checkpoint()
+            let data = try ImageExporter.data(image:image,format:.png);try ticket.checkpoint()
             try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
-            let id = UUID().uuidString
-            try data.write(to:directory.appendingPathComponent(id+".png"),options:.atomic)
-            change{$0.style.background = .image;$0.style.backgroundAssetID = id;$0.style.autoColor = false};canvas.backgroundImage = image
+            let id = UUID().uuidString;try data.write(to:directory.appendingPathComponent(id+".png"),options:.atomic)
+            return (image,id)
+        }) { [weak self] result in
+            guard let self,!self.userIsClosing,self.canvas.state.style == before else { return }
+            switch result {
+            case .success(let (image,id)):
+                self.loadedBackgroundID = id
+                self.change{$0.style.background = .image;$0.style.backgroundAssetID = id;$0.style.autoColor = false};self.canvas.backgroundImage = image;self.setStatus("Background ready")
+            case .failure(let error):
+                if wallpaper { self.change{$0.style.background = .gradient};self.setStatus("Wallpaper unavailable. Using the gradient; choose an image instead.",error:true) }
+                else { self.showError(error) }
+            }
+        }
     }
     private func useDesktopBackground() {
-        do {
-            guard let screen = window?.screen ?? NSScreen.main,let url = NSWorkspace.shared.desktopImageURL(for:screen),!url.hasDirectoryPath else { throw VelinshotError.invalidImage("The current desktop wallpaper is not an accessible image.") }
-            try setBackground(url:url)
-        } catch { change{$0.style.background = .gradient};setStatus("Wallpaper unavailable. Using the gradient; choose an image instead.",error:true) }
+        guard let screen = window?.screen ?? NSScreen.main,let url = NSWorkspace.shared.desktopImageURL(for:screen),!url.hasDirectoryPath else {
+            change{$0.style.background = .gradient};setStatus("Wallpaper unavailable. Choose a background image instead.",error:true);return
+        }
+        setBackground(url:url,wallpaper:true)
     }
     private func loadBackground() {
-        guard let id = canvas.state.style.backgroundAssetID,UUID(uuidString:id) != nil else { canvas.backgroundImage = nil;return }
+        guard let id = canvas.state.style.backgroundAssetID,UUID(uuidString:id) != nil else {
+            backgroundWork.cancel();pendingBackgroundID = nil;loadedBackgroundID = nil
+            if canvas.backgroundImage != nil { canvas.backgroundImage = nil };return
+        }
+        if loadedBackgroundID == id,canvas.backgroundImage != nil { return }
+        if pendingBackgroundID == id,backgroundWork.isBusy { return }
         let url = supportDirectory.appendingPathComponent("Backgrounds",isDirectory:true).appendingPathComponent(id+".png")
-        do { canvas.backgroundImage = try ImageLoader.load(url:url) }
-        catch { canvas.backgroundImage = nil;setStatus("Background image is missing. Choose it again.",error:true) }
+        pendingBackgroundID = id
+        backgroundWork.submit(work:{ _ in (try ImageLoader.open(url:url).fullResolution(),id) }) { [weak self] result in
+            guard let self,!self.userIsClosing,self.canvas.state.style.backgroundAssetID == id else { return }
+            self.pendingBackgroundID = nil
+            switch result {
+            case .success(let (image,id)):self.loadedBackgroundID = id;self.canvas.backgroundImage = image
+            case .failure:self.loadedBackgroundID = nil;self.canvas.backgroundImage = nil;self.setStatus("Background image is missing. Choose it again.",error:true)
+            }
+        }
     }
     private func loadPresets() {
         do { presets = try presetStore.load() }
@@ -452,10 +540,11 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     }
     func renderedImage() throws -> CGImage {
         window?.makeFirstResponder(canvas)
-        canvas.finishText()
+        canvas.finishText();canvas.finishPointerGesture()
         return try CanvasRenderer.render(source:source,state:canvas.state,backgroundImage:canvas.backgroundImage)
     }
     func copyImage(original:Bool = false,forceClose:Bool = false) {
+        canvas.finishText();canvas.finishPointerGesture()
         do {
             let image:CGImage
             if original { image = source } else { image = try renderedImage() }
@@ -474,7 +563,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         guard !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
-        canvas.finishText()
+        canvas.finishText();canvas.finishPointerGesture()
         let panel = NSSavePanel();panel.title = "Save screenshot";panel.canCreateDirectories = true;panel.isExtensionHidden = false;panel.allowsOtherFileTypes = false
         panel.directoryURL = preferences.directory
         let format = ExportAccessory(format:preferences.jpegByDefault ? .jpeg : .png,quality:preferences.quality)
@@ -563,6 +652,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             case "+","=":canvas.changeZoom(1.2);return true
             case "-":canvas.changeZoom(1/1.2);return true
             case "0":canvas.fit();return true
+            case "1","2","3":if let index = Int(key) { showInspectorSection(index-1) };return true
             default:return false
             }
         }
