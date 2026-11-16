@@ -8,6 +8,8 @@ The current editor candidate passes **115 core scenario bodies, 10 assertion fai
 
 This Mac has Command Line Tools without XCTest or Swift Testing. `scripts/core-checks.py` runs the same source scenario bodies in an explicitly identified native assertion harness. Unsupported constructs fail rather than being skipped. These are not reported as XCTest results. Hosted full-Xcode CI runs XCTest separately.
 
+[Full-Xcode CI at 73ead73](https://github.com/Jacknelson6/Velinshot/actions/runs/43937679951) passed all 115 XCTest cases, release compilation and bundle verification. The installed Apple Silicon binary was built from 9751d62; the CI change leaves its native build inputs unchanged. The public preview archive was downloaded again, re-extracted and verified against that exact installed executable and signature.
+
 Hosted verification uses GitHub's standard Intel macOS 15 pool with the same XCTest, release-build and bundle checks. The packaged Desktop app and local native checks remain Apple Silicon. The earlier [arm64 run](https://github.com/Jacknelson6/Velinshot/actions/runs/43932839859) never acquired a runner; GitHub reported arm64 capacity constraints before any test step ran. Architecture and local/hosted results are recorded separately.
 
 ## Native behavior
@@ -34,7 +36,7 @@ Preview-only edge antialiasing has an explicitly bounded tolerance in [the test 
 
 ## Remaining consent and GUI checks
 
-The owner confirmed capture works in the installed 4fd7102 build after its obsolete code-signature permission binding was repaired. This does not pass every capture mode or a later ad-hoc binary. Privacy grants are never automated. Mode-by-mode area/window/display and physical global-hotkey acceptance, real Finder receiving a promised file, final Share readback, launch-at-login and multiple-display capture remain distinct checks. A unit promise writer is not a real Finder drop. Unrun checks remain pending.
+The owner confirmed capture in the earlier 4fd7102 build after its obsolete code-signature permission binding was repaired. The installed 9751d62 editor update also passed real display capture with a matching fresh grant, plus area overlay cancellation. Its live synthetic checks cover import, automatic inset, mat arrow pixels in JPEG, S/save, C/copy-close and clipboard reopening. Privacy grants are never automated. Physical area/window capture gestures and global-hotkey delivery, real Finder receiving a promised file, final Share readback, launch-at-login and multiple-display capture remain distinct checks. A unit promise writer is not a real Finder drop. Unrun checks remain pending.
 
 ## Distribution and performance
 

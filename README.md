@@ -8,7 +8,7 @@
     <img alt="Swift and AppKit" src="https://img.shields.io/badge/built_with-Swift_%26_AppKit-F05138?style=flat-square">
     <a href="docs/QA.md"><img alt="Local checks: 115 core scenarios and 152 native checks" src="https://img.shields.io/badge/local_checks-115_core_%2B_152_native-7160E8?style=flat-square"></a>
   </p>
-  <p><a href="Sources">Source</a> · <a href="#make-it-yours">Build the preview</a> · <a href="docs/FEATURES.md">Features</a></p>
+  <p><a href="https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.1"><strong>Download preview</strong></a> · <a href="Sources">Source</a> · <a href="#make-it-yours">Build it yourself</a> · <a href="docs/FEATURES.md">Features</a></p>
 </div>
 
 <picture>
