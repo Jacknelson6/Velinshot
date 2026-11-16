@@ -1,0 +1,12 @@
+import AppKit
+import Foundation
+
+let app = NSApplication.shared
+if let index = CommandLine.arguments.firstIndex(of:"--smoke-check"),CommandLine.arguments.indices.contains(index+1) {
+    do { try DemoFixture.smokeCheck(directory:URL(fileURLWithPath:CommandLine.arguments[index+1],isDirectory:true));exit(0) }
+    catch { fputs("Smoke check failed: \(error.localizedDescription)\n",stderr);exit(1) }
+}
+let delegate = AppDelegate()
+app.delegate = delegate
+app.setActivationPolicy(.regular)
+app.run()
