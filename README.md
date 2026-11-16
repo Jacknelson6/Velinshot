@@ -48,7 +48,7 @@ Local OCR lets you select and copy the words in your image. Automatic PII detect
 Requires macOS 14 or later. The packaged build targets Apple Silicon; the source can be built on a compatible Mac with Apple's Swift toolchain.
 
 ```sh
-git clone https://github.com/Jacknelson6/Velinshot.git
+git clone --branch feature/native-macos https://github.com/Jacknelson6/Velinshot.git
 cd Velinshot
 bash scripts/build-app.sh
 open build/Velinshot.app
