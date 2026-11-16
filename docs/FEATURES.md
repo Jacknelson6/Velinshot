@@ -1,6 +1,6 @@
 # Feature coverage
 
-Velinshot is an independent native macOS screenshot editor. The table below maps its capabilities to the app's controls. Validation status and remaining live checks are recorded separately in QA.md.
+The table maps capabilities to the app's controls. [Validation and remaining live checks](QA.md) are recorded separately.
 
 | Function | Velinshot route |
 |---|---|
@@ -11,10 +11,11 @@ Velinshot is an independent native macOS screenshot editor. The table below maps
 | Copy and close | C / ⌘C, configurable; background double-click copies/closes |
 | Save / Save As | S / ⌘S always opens the native destination picker |
 | Copy/save original | File menu, unframed source pixels |
-| Drawing and annotations | Pen, line, arrows, boxes, ellipses, text, highlight and numbered steps |
+| Drawing and annotations | Pen, line, arrows, boxes, ellipses, text, highlight and numbered steps, including on the mat outside the image |
 | Manual blur/redact | Separate blur and opaque redaction tools |
 | Edit marks | Select/move/resize/recolor, text editing, delete, undo/redo |
 | Padding and inset | Independent outer mat and inner fill, original-pixel units |
+| Automatic inset fill | Follows the visible image's edge palette; manual color choice and Auto override |
 | Balance | Conservative uniform-edge trim, applied on import/capture or explicit toggle |
 | Automatic color | Edge-band sampling on import/capture or explicit toggle |
 | Rounded corners, shadow | One native renderer for preview and export |
@@ -30,9 +31,9 @@ Velinshot is an independent native macOS screenshot editor. The table below maps
 | Reopen closed screenshot | One most recent closed image kept in memory |
 | Launch/login, Dock, sound, filenames, default save folder | Settings using native macOS services |
 | Updates | Manual public GitHub release check |
-| Automatic PII detection | Excluded at the owner's request |
+| Automatic PII detection | Not included; manual blur and redaction remain available |
 | Cloud upload | Not implemented |
-| License management/purchase | No equivalent needed: MIT-licensed source, no paywall or required watermark |
+| License | MIT-licensed source, no paywall or required watermark |
 
 Insets and padding scale with source geometry. Fixed-size exports fit the source uniformly and fill extra space with the chosen background. Watermark size and margins use export pixels. A very small fixed output may reject watermark text that cannot fit; clear the text or choose a larger canvas.
 

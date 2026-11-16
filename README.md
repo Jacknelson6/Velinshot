@@ -1,65 +1,56 @@
 <div align="center">
   <h1>Velinshot</h1>
-  <p><strong>A good screenshot. In a moment.</strong></p>
-  <p>Capture, frame, mark it up. Copy and carry on.</p>
+  <p>Free, native screenshot editing for macOS.</p>
   <p>
-    <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-7160E8?style=flat-square"></a>
+    <a href="https://github.com/Jacknelson6/Velinshot/actions/workflows/ci.yml"><img alt="Native build and tests" src="https://github.com/Jacknelson6/Velinshot/actions/workflows/ci.yml/badge.svg?branch=main"></a>
     <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-191A25?style=flat-square">
-    <img alt="Swift and AppKit" src="https://img.shields.io/badge/built_with-Swift_%26_AppKit-F05138?style=flat-square">
-    <a href="docs/QA.md"><img alt="Local checks: 115 core scenarios and 152 native checks" src="https://img.shields.io/badge/local_checks-115_core_%2B_152_native-7160E8?style=flat-square"></a>
+    <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-191A25?style=flat-square"></a>
   </p>
-  <p><a href="https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.1"><strong>Download preview</strong></a> · <a href="Sources">Source</a> · <a href="#make-it-yours">Build it yourself</a> · <a href="docs/FEATURES.md">Features</a></p>
+  <p><a href="https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.1"><strong>Download preview</strong></a> · <a href="#build-from-source">Build from source</a> · <a href="docs/USAGE.md">User guide</a></p>
 </div>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/editor-dark.png">
-  <img src="docs/images/editor.png" alt="Velinshot framing and annotating a synthetic screenshot">
+  <img src="docs/images/editor.png" alt="The native Velinshot editor framing and annotating a synthetic screenshot">
 </picture>
 
-<sub>Native UI rendered from the real app with a synthetic fixture.</sub>
+<sub>Real AppKit views rendered with a synthetic screenshot.</sub>
 
-**Preview build.** Capture has been confirmed on the owner's Mac. Local checks cover native editing, full-canvas markup, automatic inset color and PNG/JPEG saves. Mode-by-mode capture, Finder delivery and Share destination checks remain open. [Current validation](VALIDATION.md).
+**⌘4 → capture → edit → C to copy or S to save.**
 
-Free, native screenshot editing for macOS. No account, subscription, watermark requirement or browser runtime. Built from scratch with Swift and the frameworks already on your Mac.
+Capture opens a compact editor. Draw an arrow, adjust the frame, then copy the result or choose where to save it. Shortcuts are configurable.
 
-## One short flow
-
-**⌘4 → capture → edit → C to copy, or S to choose where to save.**
-
-Drag an area, press Space to capture a window, or capture a whole display. The screenshot opens straight into a compact editor. Add an arrow, draw a box, soften the corners, give it some breathing room, and send it on its way.
-
-| Capture | Mark it up | Make it look right | Get it out |
-|---|---|---|---|
-| Area, window, display | Pen, arrow, line | Separate padding and inner inset | One-key copy and save |
-| File and clipboard import | Rectangle, ellipse | Rounded corners, shadows, borders | PNG and compressed JPEG |
-| Drag an image into the editor | Text and numbered steps | Gradient, color, image, desktop wallpaper | Drag export, with Finder validation pending |
-| Editable local history, opt-in | Highlight, blur, opaque redact | Exact pixel sizes and social canvases | Native Share picker |
-| Reopen the last closed capture | Move, resize, recolor, undo | Saved presets and optional text watermark | Copy or save the original image |
-
-Local OCR lets you select and copy the words in your image. Automatic PII detection is intentionally excluded. Manual redaction stays available.
-
-| Backdrop | Output |
-|---|---|
-| ![Backdrop controls in the native editor](docs/images/editor-backdrop.png) | ![Output controls in the native editor](docs/images/editor-output.png) |
-
-<sub>Real native views, shown with the same synthetic screenshot.</sub>
+- **Capture:** area, window and display, plus file, clipboard and drag import.
+- **Annotate:** arrows, boxes, pen, text, numbered steps, highlight and manual redaction. Draw across the entire canvas, including the mat outside your screenshot.
+- **Frame:** automatic inset color, padding, rounded corners, shadows, backgrounds, exact sizes and saved presets.
+- **Export:** PNG or JPEG, one-key copy/save, drag export and the native Share picker.
+- **Keep working:** local OCR, undo/redo, reopen the last screenshot and optional editable history.
 
 ## Download and open
 
-[Download the Apple Silicon preview](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.1/Velinshot-preview-arm64.zip) for macOS 14 or later. Unzip it and put **Velinshot.app** in your chosen location before opening it or granting capture access.
+[Download the Apple Silicon preview](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.1/Velinshot-preview-arm64.zip). Requires **macOS 14 or later**. Unzip it and put **Velinshot.app** in your chosen location before granting capture access.
 
 The preview is ad-hoc signed and **not notarized** by Apple. If macOS says it could not verify Velinshot:
 
 1. Click **Done** in the blocked-opening alert.
-2. Open **System Settings → Privacy & Security** and scroll to **Security**.
-3. Click **Open Anyway** beside the Velinshot message.
-4. Confirm the next opening prompt. Use Touch ID or your Mac login password if macOS asks.
+2. Go to **System Settings → Privacy & Security** and scroll to **Security**.
+3. Click **Open Anyway** beside Velinshot, then confirm the opening prompt. Authenticate if macOS asks.
 
-This saves an exception for this app on your Mac. See [Apple's app-opening instructions](https://support.apple.com/en-us/102445). This first-launch approval is separate from Screen Recording permission.
+See [Apple's first-launch instructions](https://support.apple.com/en-us/102445).
 
-## Make it yours
+For capture, enable **Velinshot** under **Privacy & Security → Screen & System Audio Recording**, then relaunch if requested. The [user guide](docs/USAGE.md#capture-access) explains permission and shortcut troubleshooting.
 
-Requires macOS 14 or later. The packaged build targets Apple Silicon; the source can be built on a compatible Mac with Apple's Swift toolchain.
+**Preview status:** native editing and real display capture have been verified. Some capture and cross-app delivery checks remain open. [Validation and known limits](docs/QA.md).
+
+## Small and local
+
+About **2.2 MB**, built with Swift, AppKit and system frameworks. No external package dependencies or embedded browser. Image preparation runs on a serial worker, and editing reuses a reduced display proxy while exports retain the original pixels. [Measured performance](docs/PERFORMANCE.md).
+
+No account, subscription, analytics or required watermark. Screenshots stay on your Mac unless you share them. History is off by default. The manual update command checks public GitHub release metadata. Automatic PII detection is excluded; manual blur and redaction are available.
+
+## Build from source
+
+Requires macOS 14 or later and Apple's Swift toolchain. The [package manifest](Package.swift) declares Swift 5.9 tools or later.
 
 ```sh
 git clone https://github.com/Jacknelson6/Velinshot.git
@@ -68,57 +59,15 @@ bash scripts/build-app.sh
 open build/Velinshot.app
 ```
 
-The build script makes an app bundle with a local ad-hoc signature. A Developer ID and Apple notarization are not included. Downloaded builds use the [first-launch approval above](#download-and-open).
+The script creates a locally ad-hoc signed app. Run checks with `bash scripts/check.sh`. Full Xcode runs XCTest; Command Line Tools use the documented native assertion fallback. [Contributing](CONTRIBUTING.md).
 
-On first capture, allow **Velinshot** in **System Settings → Privacy & Security → Screen & System Audio Recording**. The Settings window has a shortcut to that pane. macOS may require a relaunch, and a newly rebuilt ad-hoc app may need consent again.
+## Documentation
 
-**Shortcut already in use?** If macOS refuses the selected shortcut, record another one in Settings or try ⌘⇧2.
-
-## Your hands can stay on the keyboard
-
-| Key | Action |
+| Use the app | Work on the app |
 |---|---|
-| ⌘4 | Capture and edit, configurable |
-| ⌃⌥⌘5 | Capture and copy, configurable |
-| C / ⌘C | Copy finished image; optionally close |
-| S / ⌘S | Native save picker |
-| ⌘Z / ⇧⌘Z | Undo / redo |
-| D · A · R · E | Draw · Arrow · Rectangle · Ellipse |
-| T · H · B · K | Text · Highlight · Blur · Redact |
-| N · X · L · V | Number · Crop · Line · Select |
-| Delete | Remove a selected mark |
-| Tab / Shift-Tab in Select | Cycle marks, including marks outside the canvas |
-| ⌘0 · ⌘+ · ⌘− | Fit · Zoom in · Zoom out |
-| ⌘1 · ⌘2 · ⌘3 | Frame · Backdrop · Output inspector |
-| ⇧⌘T | Reopen the last closed screenshot |
-
-Draw and place text anywhere in the framed canvas, including the mat around the screenshot. Crop and blur stay within the image. Shift constrains boxes to squares, ellipses to circles, and arrows/lines to 45-degree directions. In Select, double-click a text mark to edit it or empty background to copy and close. Tab cycles through marks; Escape or tabbing past the last mark releases canvas focus. Letter shortcuts yield while you are typing.
-
-Inset fill follows the visible image's dominant edge color by default. The Auto control restores matching after a manual choice; choosing a fill color turns Auto off. Saved older history and presets retain their recorded colors.
-
-## Small by design
-
-The app uses **AppKit, Core Graphics, ScreenCaptureKit, ImageIO and Vision**. There are no Swift package dependencies, embedded Chromium, Electron, Tauri, Rust runtime or background web service. Shared layout and drawing code keep rounding, crops and annotations aligned. File decoding and exact balance analysis run on one serial worker. A cached display proxy makes editing cheaper; copies, saves, OCR and history use the retained original pixels.
-
-Images are limited to 40 megapixels and 16,384 pixels per side. Previews render at a reduced raster size. Local history is off by default and capped at 50 entries or 250 MB when enabled. The most recently closed image is retained in memory until replaced or the app quits. There is no polling service or recurring idle render. See [performance notes](docs/PERFORMANCE.md) for measured scope and limits.
-
-## Local work stays local
-
-Capturing, rendering, OCR and history work on your Mac. No screenshot is uploaded, and there are no analytics or account requests. A manual **Check for Updates** command asks GitHub for public release metadata. Sharing happens only through the destination you choose in macOS's Share picker.
-
-History and presets live in Application Support by default. A custom history location uses a dedicated `Velinshot History` subfolder. Custom backgrounds are copied into a managed local asset store so presets can reopen them.
-
-## Built to be checked
-
-```sh
-bash scripts/check.sh
-```
-
-Full Xcode runs the XCTest suite. Command Line Tools installations without XCTest run the same scenario bodies through an explicitly named native assertion harness. Unsupported test constructs fail rather than being skipped. Local checks also exercise hidden native canvas gestures, preferences, promised PNG files, real image decoding and OCR.
-
-Hosted CI runs XCTest, a release build and bundle validation. Screen Recording and real drag/Share flows require a Mac GUI and are reported separately. See [validation notes](docs/QA.md) for evidence and remaining permission-dependent checks.
-
-
-Contributions are welcome. [Read the guide](CONTRIBUTING.md), keep the app small, and make the screenshot better.
+| [User guide and shortcuts](docs/USAGE.md) | [Contributing](CONTRIBUTING.md) |
+| [Feature reference](docs/FEATURES.md) | [Product scope](PRODUCT.md) |
+| [Preview validation](docs/QA.md) | [Interface design](DESIGN.md) |
+| [Report a bug](https://github.com/Jacknelson6/Velinshot/issues/new/choose) | [Performance evidence](docs/PERFORMANCE.md) |
 
 [MIT licensed](LICENSE).
