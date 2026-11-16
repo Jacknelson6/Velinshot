@@ -2,7 +2,7 @@ import AppKit
 import VelinshotCore
 
 /// Exports the real native view hierarchy using only our synthetic fixture.
-/// No screen capture, user defaults, user screenshots or OS settings are read.
+/// No screen capture, user preference edits or user screenshots are involved.
 enum StudioSnapshots {
     static func run(directory:URL) throws {
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
@@ -27,6 +27,7 @@ enum StudioSnapshots {
                 window.appearance = NSAppearance(named:dark ? .darkAqua : .aqua)
                 window.setContentSize(size);root.layoutSubtreeIfNeeded()
                 guard editor.canvas.bounds.width >= 500,editor.canvas.bounds.height >= 420 else { throw VelinshotError.invalidImage("The compact editor clipped its canvas.") }
+                guard editor.frameControlsFit else { throw VelinshotError.invalidImage("The Frame inspector clipped Reset crop.") }
                 try editor.canvas.prepareDocumentationSnapshot()
                 let view = root.superview ?? root
                 try write(view:view,to:directory.appendingPathComponent(name+".png"))

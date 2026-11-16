@@ -6,7 +6,7 @@ enum EditorTool: String, CaseIterable {
     var symbol: String {
         switch self {
         case .select: return "cursorarrow"
-        case .pen: return "pencil.tip"
+        case .pen: return "pencil"
         case .arrow: return "arrow.up.right"
         case .rectangle: return "rectangle"
         case .ellipse: return "circle"

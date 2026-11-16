@@ -8,8 +8,22 @@ Exact balance uses the same original-resolution content predicate, corner safegu
 
 Release synthetic benchmarks cover PNG, JPEG and HEIC at tiny, 1.6 MP, 8.85 MP and 33.18 MP, plus high-entropy and alpha fixtures. Reports separate encoded read/metadata, native decode, exact balance, first render, proxy creation and three style redraws. Fresh-process means app-cache cold, with OS cache uncontrolled; warm is a same-process repeat. No global cache purge is used. These timings exclude actual OS capture, clipboard transfer and GUI compositor paint.
 
-Initial matrices show materially less exact-analysis and repeated-preview CPU on screenshot-like images. They also show variable end-to-end decoding times, including a slower first preparation for a high-entropy PNG. A bounded paired baseline/current comparison and native idle CPU interval are being recorded before the final performance claims. No universal instant-load or zero-CPU claim is made.
+## Paired historical comparison
 
-The one-document 33 MP synthetic preparation target is below 600 MiB process peak. The latest complete matrix peaked at 479.9 MiB after the bounded-reader change, compared with 550.6 MiB in the preceding prepared path. This is process RSS during that finite benchmark, not an aggregate limit for many open documents. Each open document retains its original pixel buffer, and one closed document is retained for Reopen Closed Screenshot.
+Four alternating AB/BA pairs use actual core source from 85c74a9 and the frozen current core, identical fixture bytes, 40 fresh child processes and 80 cold/warm records. All source dimensions and crop bounds matched; source and fixture hashes were unchanged.
 
-Reproduce finite current-path evidence with `python3 scripts/checks/benchmark-pipeline.py --mode prepared`. A historical baseline must use the corresponding earlier core source; passing `--mode baseline` alone on new core source does not restore the earlier algorithm. The final report records source hashes and medians/ranges instead of selecting the fastest samples.
+| Fresh-process preparation | Earlier median | Current median | Current range |
+|---|---:|---:|---:|
+|8.85 MP UI PNG|210.5 ms|95.5 ms|90.6–101.1 ms|
+|33.18 MP UI PNG|725.1 ms|282.4 ms|262.1–342.9 ms|
+|33.18 MP UI JPEG|821.9 ms|385.6 ms|366.5–408.1 ms|
+|33.18 MP UI HEIC|857.4 ms|470.0 ms|417.2–627.9 ms|
+|33.18 MP high-entropy PNG|632.5 ms|761.2 ms|See complete report; variable|
+
+Fresh-process preparation CPU medians for the first four rows changed 207.4→96.7, 710.2→271.2, 730.2→292.8 and 696.4→296.3 ms. Three cached style redraws on the 33 MP UI PNG changed 149.7→39.7 ms elapsed and 154.5→45.2 ms CPU. These are finite synthetic measurements on one M2 Mac, not universal promises.
+
+The high-entropy PNG is a real tradeoff: fresh median was slower, while its warm median changed 653.8→612.1 ms with broad ranges. Retaining a frozen encoded input and creating a reusable proxy add work to an image dominated by decompression. No universal instant-load claim is made.
+
+Fresh single-preparation process peak reached 591 MiB, within the 600 MiB synthetic target. Cumulative warm high-water marks reached 752.8 MiB, compared with 875.9 MiB earlier, but the harness includes a separate encoded-thumbnail diagnostic before the repeat; those cumulative peaks cannot isolate repeat-preparation memory. This is not a total-memory cap for many documents. Each open document retains its original pixels; one closed source remains for Reopen Closed Screenshot. Native idle CPU is recorded separately after final GUI validation.
+
+Reproduce finite current-path evidence with `python3 scripts/checks/benchmark-pipeline.py --mode prepared`. A historical baseline must use the corresponding earlier core source; `--mode baseline` alone does not restore the old algorithm. The paired report preserves source/fixture hashes, all records and ranges. Hosted CI and actual OS capture are separate validation axes.

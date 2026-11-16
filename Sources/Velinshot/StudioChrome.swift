@@ -10,7 +10,7 @@ enum StudioPalette {
     static let canvas = NSColor(name:"Studio canvas") { appearance in
         appearance.bestMatch(from:[.aqua,.darkAqua]) == .darkAqua
             ? NSColor(srgbRed:0.077,green:0.081,blue:0.103,alpha:1)
-            : NSColor(srgbRed:0.925,green:0.930,blue:0.950,alpha:1)
+            : NSColor(srgbRed:0.900,green:0.907,blue:0.938,alpha:1)
     }
     static let accent = NSColor(name:"Studio accent") { appearance in
         appearance.bestMatch(from:[.aqua,.darkAqua]) == .darkAqua
@@ -27,7 +27,7 @@ final class StudioSurface:NSView {
 
 /// Uses ordinary NSButton targeting, keyboard navigation and accessibility.
 /// Hover is event-driven; there are no animations, timers or idle refreshes.
-final class StudioButton:NSButton {
+class StudioButton:NSButton {
     enum Kind { case quiet, secondary, primary, tool }
     var kind:Kind = .quiet
     var shortcut:String?
@@ -94,6 +94,41 @@ final class StudioButton:NSButton {
     }
     override var focusRingMaskBounds:NSRect { bounds }
     override func drawFocusRingMask() { NSBezierPath(roundedRect:bounds,xRadius:8,yRadius:8).fill() }
+}
+
+final class StudioSegments:NSSegmentedControl {
+    override func draw(_ dirtyRect:NSRect) {
+        guard segmentCount>0 else { return }
+        let width = bounds.width/CGFloat(segmentCount)
+        for index in 0..<segmentCount {
+            let selected = selectedSegment == index
+            let font = NSFont.systemFont(ofSize:12,weight:selected ? .semibold : .regular)
+            let title = label(forSegment:index) ?? ""
+            let size = (title as NSString).size(withAttributes:[.font:font])
+            let x = CGFloat(index)*width
+            (title as NSString).draw(at:CGPoint(x:x+(width-size.width)/2,y:bounds.midY-size.height/2),withAttributes:[.font:font,.foregroundColor:selected ? StudioPalette.accent : NSColor.secondaryLabelColor])
+            if selected {
+                StudioPalette.accent.setFill()
+                let y:CGFloat = isFlipped ? bounds.height-3 : 0
+                NSBezierPath(roundedRect:CGRect(x:x+8,y:y,width:width-16,height:2.5),xRadius:1.25,yRadius:1.25).fill()
+            }
+        }
+    }
+}
+
+final class StudioColorWell:NSColorWell {
+    override func draw(_ dirtyRect:NSRect) {
+        let sample = CGRect(x:6,y:bounds.midY-8,width:16,height:16)
+        NSColor.white.setFill();NSBezierPath(roundedRect:sample,xRadius:4,yRadius:4).fill()
+        color.setFill();NSBezierPath(roundedRect:sample,xRadius:4,yRadius:4).fill()
+        NSColor.separatorColor.withAlphaComponent(0.6).setStroke()
+        NSBezierPath(roundedRect:sample.insetBy(dx:0.4,dy:0.4),xRadius:4,yRadius:4).stroke()
+        let rgb = color.usingColorSpace(.sRGB)
+        func channel(_ value:CGFloat) -> Int { value.isFinite ? Int((min(1,max(0,value))*255).rounded()) : 0 }
+        let hex = rgb.map { String(format:"#%02X%02X%02X",channel($0.redComponent),channel($0.greenComponent),channel($0.blueComponent)) } ?? "Color"
+        (hex as NSString).draw(at:CGPoint(x:29,y:bounds.midY-6.5),withAttributes:[.font:NSFont.monospacedSystemFont(ofSize:10,weight:.medium),.foregroundColor:NSColor.secondaryLabelColor])
+        Brand.symbol("chevron.down",size:8)?.draw(in:CGRect(x:bounds.maxX-12,y:bounds.midY-3,width:7,height:6),from:.zero,operation:.sourceOver,fraction:0.7,respectFlipped:true,hints:nil)
+    }
 }
 
 final class GradientSwatch:NSButton {

@@ -4,7 +4,7 @@ Compilation, automated checks, actual native GUI exercises and OS-consent-depend
 
 ## Current local gate
 
-The release candidate passes **90 core scenario bodies, 10 assertion failure probes and 86 native integration checks**, plus release compilation, actual image decode/encode, Vision OCR and bundle/signature/linkage validation. The original 67 scenarios remain unchanged; the original forty are a subset. Additional seeded tests compare exact balance against the prior brute-force oracle on 886 thin, threshold, random, transparent and edge fixtures.
+The release candidate passes **90 core scenario bodies, 10 assertion failure probes and 89 native integration checks**, plus release compilation, actual image decode/encode, Vision OCR and bundle/signature/linkage validation. The original 67 scenarios remain unchanged; the original forty are a subset. Additional seeded tests compare exact balance against the prior brute-force oracle on 886 thin, threshold, random, transparent and edge fixtures.
 
 This Mac has Command Line Tools without XCTest or Swift Testing. `scripts/core-checks.py` runs the same source scenario bodies in an explicitly identified native assertion harness. Unsupported constructs fail rather than being skipped. These are not reported as XCTest results. Hosted full-Xcode CI runs XCTest separately.
 
@@ -35,3 +35,7 @@ Area/window/display capture is not passed until the owner grants Screen Recordin
 ## Distribution and performance
 
 The current package is an Apple Silicon native app of about 2.2 MB, using system frameworks only, with an ad-hoc signature. It has no Developer ID or notarization receipt. A rebuilt ad-hoc app may need macOS consent again. The final release report binds source commit, executable SHA256, size, hosted tests, native QA and remaining consent gates. [Performance notes](PERFORMANCE.md) describe synthetic timings and their limits.
+
+## Focused appearance repair
+
+The minimum Frame inspector has tighter spacing so Reset crop fits. Active markup replaces the composition list and has a direct route back. Underline tabs and a softer text field remove heavy control slabs; color wells show both a swatch and hex value. Drag uses the same native button drawing as the other actions. Automatic analysis also waits for inspector and watermark gestures, with explicit idle/active regression checks. Refreshed native appearance exports receive independent review.

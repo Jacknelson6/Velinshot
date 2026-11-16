@@ -126,7 +126,14 @@ enum PlatformChecks {
             if let slider = view as? GestureSlider,slider.identifier?.rawValue == "padding" { return slider }
             return view.subviews.compactMap{findSlider($0)}.first
         }
+        editor.showInspectorSection(0)
         guard let slider = editorWindow.contentView.flatMap({findSlider($0)}) else { throw VelinshotError.invalidImage("Padding slider was not built.") }
+        let analysisState = editor.state
+        try check(editor.canInstallAnalysis(for:analysisState),"automatic analysis may install only in an idle matching document")
+        slider.onBegin?()
+        try check(!editor.canInstallAnalysis(for:analysisState),"a pending frame slider gesture blocks late automatic crop installation")
+        slider.onEnd?()
+        try check(editor.canInstallAnalysis(for:analysisState),"ending an unchanged frame gesture allows analysis again")
         let oldPadding = editor.state.style.padding
         undo?.beginUndoGrouping()
         slider.onBegin?()

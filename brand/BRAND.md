@@ -6,7 +6,7 @@ Velinshot gives a screenshot room to breathe. Its folded V turns a flat capture 
 
 Use `logo.png` as the transparent primary mark. `app-icon.png` is the same clean standalone V used by the shipped app; the build script generates its native `.icns` sizes. `wordmark-light.svg` and `wordmark-dark.svg` pair it with the name and tagline. Keep clear space of at least one quarter of the mark's width.
 
-`brand-kit.png` is the image-based identity board. Its light/dark tiles demonstrate optional applications of the mark. `logo-exploration.png` contains twelve concepts across four directions; the final direction grew from B2. `icon-study.png` is an earlier tile study, not the shipped icon.
+`brand-kit.svg` and `brand-kit.png` are the canonical identity board. Every placed mark uses the exact same generated PNG; the SVG remains editable. Exact-size 900×240 PNG wordmarks accompany the SVG files. The earlier generated board is kept as `brand-kit-exploration.png`, and the pre-refinement mark as `logo-original.png`. Those are process studies, not alternate production marks. `logo-exploration.png` contains twelve concepts across four directions; the final direction grew from B2. `icon-study.png` is an earlier tile study, not the shipped icon.
 
 ## Color
 
@@ -32,4 +32,4 @@ Use short, useful verbs: capture, draw, frame, copy, save. Show the image instea
 
 ## Provenance
 
-The identity images were generated with the built-in image-generation tool on November 15, 2026. The mark is original artwork; no Xnapper art was reused. Exact prompts and reference roles are in `PROMPTS.md`. Wordmarks are editable SVG compositions of the generated transparent mark and the included Manrope face.
+The identity images were generated with the built-in image-generation tool on November 15, 2026. The mark is original artwork; no Xnapper art was reused. Exact prompts and reference roles are in `PROMPTS.md`. The production mark was refined for cleaner fold separation. Wordmarks and the current board are deterministic SVG compositions of that canonical transparent image and the included Manrope face, with PNG exports at their intrinsic aspect ratios. These compositions preserve the mark rather than asking a generator to redraw it.

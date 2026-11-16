@@ -39,21 +39,24 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private var presetPicker = NSPopUpButton()
     private var inspectorPages:[NSView] = []
     private var inspectorTabs:NSSegmentedControl?
+    private let inspectorHeading = Brand.label("Composition",size:15,weight:.semibold)
+    private let markupDescription = Brand.label("Arrow",size:12,weight:.medium)
     private weak var inspectorScroll:NSScrollView?
+    private weak var resetCropButton:NSButton?
     private var annotationWidth:NSSegmentedControl?
     private var annotationFont:NSPopUpButton?
     private weak var markupSection:NSView?
     private var undoButton:NSButton?
     private var redoButton:NSButton?
-    private var firstColor = NSColorWell()
-    private var secondColor = NSColorWell()
-    private var insetColor = NSColorWell()
-    private var annotationColorWell = NSColorWell()
+    private var firstColor = StudioColorWell()
+    private var secondColor = StudioColorWell()
+    private var insetColor = StudioColorWell()
+    private var annotationColorWell = StudioColorWell()
     private var balanceCheck:NSButton!
     private var autoColorCheck:NSButton!
     private var watermarkField = NSTextField()
     private var watermarkPosition = NSPopUpButton()
-    private var watermarkColor = NSColorWell()
+    private var watermarkColor = StudioColorWell()
     private var sharePicker:NSSharingServicePicker?
     private var statusLabel = Brand.label("",size:11)
     private var dimensionsLabel = Brand.label("",size:11)
@@ -106,7 +109,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         canvas.onTextEditingChange = { [weak self] active in self?.textEditingActive = active;self?.fieldUndo.removeAllActions() }
         canvas.onSelection = { [weak self] annotation in
             guard let self else { return }
-            self.markupSection?.isHidden = annotation == nil && [.select,.crop].contains(self.canvas.tool)
+            self.updateInspectorContext(annotation)
             guard let annotation else { return }
             self.annotationColorWell.color = annotation.color.nsColor
             self.canvas.annotationColor = annotation.color;self.canvas.lineWidth = annotation.lineWidth;self.canvas.fontSize = annotation.fontSize
@@ -217,8 +220,8 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     @objc private func requestSettings() { onSettings?() }
     private func buildInspector() -> NSView {
         let panel = StudioSurface()
-        let heading = Brand.label("Composition",size:15,weight:.semibold)
-        let tabs = NSSegmentedControl(labels:["Frame","Backdrop","Output"],trackingMode:.selectOne,target:self,action:#selector(inspectorTabChanged));tabs.selectedSegment = 0;tabs.controlSize = .regular;tabs.setAccessibilityLabel("Inspector section")
+        let heading = inspectorHeading
+        let tabs = StudioSegments(labels:["Frame","Backdrop","Output"],trackingMode:.selectOne,target:self,action:#selector(inspectorTabChanged));tabs.selectedSegment = 0;tabs.segmentDistribution = .fillEqually;tabs.controlSize = .regular;tabs.setAccessibilityLabel("Inspector section")
         inspectorTabs = tabs
         let top = NSStackView(views:[heading,tabs]);top.orientation = .vertical;top.alignment = .leading;top.spacing = 13
         panel.addSubview(top);top.translatesAutoresizingMaskIntoConstraints = false
@@ -232,7 +235,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         inspectorScroll = scroll
         func add(_ view:NSView,to group:NSStackView) { group.addArrangedSubview(view);view.translatesAutoresizingMaskIntoConstraints = false;view.widthAnchor.constraint(equalTo:group.widthAnchor).isActive = true }
         func group() -> NSStackView { let view = NSStackView();view.orientation = .vertical;view.alignment = .leading;view.spacing = 16;view.detachesHiddenViews = true;add(view,to:stack);return view }
-        let frame = group(),backdrop = group(),output = group();inspectorPages = [frame,backdrop,output];backdrop.isHidden = true;output.isHidden = true
+        let frame = group(),backdrop = group(),output = group();frame.spacing = 11;inspectorPages = [frame,backdrop,output];backdrop.isHidden = true;output.isHidden = true
         add(sliderRow("Padding",key:"padding",min:0,max:240),to:frame)
         add(sliderRow("Inset",key:"inset",min:0,max:160),to:frame)
         insetColor.target = self;insetColor.action = #selector(insetColorChanged);insetColor.setAccessibilityLabel("Inset fill color")
@@ -242,7 +245,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         add(sliderRow("Border",key:"borderWidth",min:0,max:12),to:frame)
         add(separator(),to:frame)
         balanceCheck = CheckButton(title:"Auto balance",value:canvas.state.style.autoBalance) { [weak self] enabled in self?.setAutomaticBalance(enabled) };add(balanceCheck,to:frame)
-        let reset = ActionButton(title:"Reset crop",symbol:"arrow.uturn.backward") { [weak self] in self?.change { $0.crop = nil;$0.style.autoBalance = false };self?.canvas.fit() };reset.controlSize = .small;add(reset,to:frame)
+        let reset = StudioButton("Reset crop",symbol:"arrow.uturn.backward") { [weak self] in self?.change { $0.crop = nil;$0.style.autoBalance = false };self?.canvas.fit() };resetCropButton = reset;add(reset,to:frame)
 
         backgroundPicker.addItems(withTitles:["Gradient","Solid color","Image","Transparent"]);backgroundPicker.target = self;backgroundPicker.action = #selector(backgroundChanged);backgroundPicker.setAccessibilityLabel("Background type");add(backgroundPicker,to:backdrop)
         let swatches = NSStackView();swatches.spacing = 9
@@ -264,7 +267,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         ratioPicker.addItems(withTitles:Self.ratios.map{$0.0}+["Custom ratio or size…"]+Self.sizes.map{$0.0});ratioPicker.target = self;ratioPicker.action = #selector(ratioChanged);ratioPicker.setAccessibilityLabel("Canvas aspect ratio");add(ratioPicker,to:output)
         scalePicker.addItems(withTitles:["1×  Original pixels","2×  Double pixels","½×  Smaller image","Set output width…"]);scalePicker.target = self;scalePicker.action = #selector(scaleChanged);scalePicker.setAccessibilityLabel("Output scale");add(scalePicker,to:output)
         add(separator(),to:output);add(Brand.label("WATERMARK",size:10,weight:.semibold),to:output)
-        watermarkField.placeholderString = "Optional text";watermarkField.delegate = self;watermarkField.setAccessibilityLabel("Optional watermark text");add(watermarkField,to:output)
+        watermarkField.placeholderString = "Optional text";watermarkField.delegate = self;watermarkField.isBezeled = false;watermarkField.drawsBackground = true;watermarkField.backgroundColor = .textBackgroundColor;watermarkField.wantsLayer = true;watermarkField.layer?.cornerRadius = 6;watermarkField.layer?.masksToBounds = true;watermarkField.setAccessibilityLabel("Optional watermark text");add(watermarkField,to:output)
         watermarkPosition.addItems(withTitles:["Top left","Top right","Bottom left","Bottom right"]);watermarkPosition.target = self;watermarkPosition.action = #selector(watermarkPositionChanged);watermarkPosition.setAccessibilityLabel("Watermark position");add(watermarkPosition,to:output)
         watermarkColor.target = self;watermarkColor.action = #selector(watermarkColorChanged);watermarkColor.setAccessibilityLabel("Watermark color");add(colorRow("Text color",well:watermarkColor),to:output)
         add(separator(),to:output);add(Brand.label("SAVED STYLES",size:10,weight:.semibold),to:output)
@@ -272,18 +275,19 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         add(ActionButton(title:"Save current style…",symbol:"plus") { [weak self] in self?.savePreset() },to:output)
         add(ActionButton(title:"Delete selected preset",symbol:"minus") { [weak self] in self?.deletePreset() },to:output)
 
-        let annotation = NSStackView();annotation.orientation = .vertical;annotation.alignment = .leading;annotation.spacing = 12
-        add(separator(),to:annotation);add(Brand.label("MARKUP",size:10,weight:.semibold),to:annotation)
+        let annotation = NSStackView();annotation.orientation = .vertical;annotation.alignment = .leading;annotation.spacing = 18;annotation.detachesHiddenViews = true
+        add(markupDescription,to:annotation)
         annotationColorWell.color = canvas.annotationColor.nsColor;annotationColorWell.target = self;annotationColorWell.action = #selector(annotationColorChanged);annotationColorWell.setAccessibilityLabel("Annotation color");add(colorRow("Color",well:annotationColorWell),to:annotation)
-        let width = NSSegmentedControl(labels:["Thin","Medium","Bold"],trackingMode:.selectOne,target:self,action:#selector(widthChanged));width.selectedSegment = 1;width.setAccessibilityLabel("Annotation stroke width");annotationWidth = width;add(width,to:annotation)
+        let width = StudioSegments(labels:["Thin","Medium","Bold"],trackingMode:.selectOne,target:self,action:#selector(widthChanged));width.selectedSegment = 1;width.segmentDistribution = .fillEqually;width.setAccessibilityLabel("Annotation stroke width");annotationWidth = width;add(width,to:annotation)
         let fonts = NSPopUpButton();fonts.addItems(withTitles:["Text 24 px","Text 36 px","Text 48 px","Text 72 px","Text 96 px"]);fonts.selectItem(at:1);fonts.target = self;fonts.action = #selector(fontChanged);fonts.setAccessibilityLabel("Annotation text size");annotationFont = fonts;add(fonts,to:annotation)
+        add(StudioButton("Back to composition",symbol:"arrow.left") { [weak self] in self?.setTool(.select) },to:annotation)
         add(annotation,to:stack);stack.removeArrangedSubview(annotation);stack.insertArrangedSubview(annotation,at:0)
         markupSection = annotation;annotation.isHidden = true
         return panel
     }
     private func colorRow(_ title:String,well:NSColorWell) -> NSView {
         well.controlSize = .small;well.colorWellStyle = .minimal
-        well.widthAnchor.constraint(equalToConstant:42).isActive = true;well.heightAnchor.constraint(equalToConstant:24).isActive = true
+        well.widthAnchor.constraint(equalToConstant:92).isActive = true;well.heightAnchor.constraint(equalToConstant:26).isActive = true
         let row = NSStackView(views:[Brand.label(title),NSView(),well]);row.alignment = .centerY;return row
     }
     @objc private func inspectorTabChanged(_ tabs:NSSegmentedControl) {
@@ -293,9 +297,14 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     }
     func showInspectorSection(_ index:Int) {
         guard (0..<inspectorPages.count).contains(index),let tabs = inspectorTabs else { return }
+        setTool(.select)
         tabs.selectedSegment = index;inspectorTabChanged(tabs)
     }
-    private func separator() -> NSView { let box = NSBox();box.boxType = .separator;return box }
+    var frameControlsFit:Bool {
+        guard let button = resetCropButton,let clip = inspectorScroll?.contentView,!button.isHiddenOrHasHiddenAncestor else { return false }
+        return clip.bounds.contains(clip.convert(button.bounds,from:button))
+    }
+    private func separator() -> NSView { let space = NSView();space.heightAnchor.constraint(equalToConstant:4).isActive = true;return space }
     private func sliderRow(_ title:String,key:String,min:Double,max:Double) -> NSView {
         let label = Brand.label(title)
         let value = Brand.label("",size:11);value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor
@@ -313,7 +322,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     }
     func setTool(_ tool:EditorTool) {
         canvas.finishText();canvas.finishPointerGesture();canvas.tool = tool
-        markupSection?.isHidden = [.select,.crop].contains(tool)
+        updateInspectorContext(nil)
         if let scroll = inspectorScroll { scroll.contentView.scroll(to:.zero);scroll.reflectScrolledClipView(scroll.contentView) }
         for (kind,button) in toolButtons {
             button.state = kind == tool ? .on : .off
@@ -321,6 +330,17 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         }
         window?.makeFirstResponder(canvas)
         setStatus(tool.title)
+    }
+    private func updateInspectorContext(_ annotation:Annotation?) {
+        let active = annotation != nil || ![.select,.crop].contains(canvas.tool)
+        markupSection?.isHidden = !active;inspectorTabs?.isHidden = active
+        inspectorHeading.stringValue = active ? "Markup" : "Composition"
+        let index = inspectorTabs?.selectedSegment ?? 0
+        for (pageIndex,page) in inspectorPages.enumerated() { page.isHidden = active || pageIndex != index }
+        let kind = annotation?.kind ?? canvas.tool.annotationKind
+        markupDescription.stringValue = kind?.rawValue.capitalized ?? canvas.tool.rawValue.capitalized
+        annotationFont?.isHidden = kind != .text && kind != .number
+        annotationWidth?.isHidden = kind == .text || kind == .number || kind == .redact
     }
     private func commit(before:EditState,after:EditState) {
         guard before != after else { return }
@@ -449,7 +469,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             switch result {
             case .success(let value):
                 self.analysis = value
-                guard self.canvas.state == before,!self.canvas.hasActiveGesture else { self.syncInspector();self.setStatus("Image changed. Choose balance again when ready.");return }
+                guard self.canInstallAnalysis(for:before) else { self.syncInspector();self.setStatus("Image changed. Choose balance again when ready.");return }
                 self.change {
                     if balance { $0.crop = value.bounds?.bounds;$0.style.autoBalance = true }
                     if colors,let pair = value.colors { $0.style.color1 = pair.0;$0.style.color2 = pair.1;$0.style.background = .gradient;$0.style.autoColor = true }
@@ -458,6 +478,9 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             case .failure(let error):self.syncInspector();self.showError(error)
             }
         }
+    }
+    func canInstallAnalysis(for state:EditState) -> Bool {
+        canvas.state == state && !canvas.hasActiveGesture && inspectorGestureBefore == nil && watermarkGestureBefore == nil && !userIsClosing
     }
     private func chooseBackground() {
         let panel = NSOpenPanel();panel.allowedContentTypes = [.image];panel.canChooseDirectories = false

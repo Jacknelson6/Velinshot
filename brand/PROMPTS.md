@@ -20,13 +20,13 @@ Mode: edit, transparent exterior. Reference: initial tile study. Earlier explora
 
 > Refine this exact Velinshot macOS app icon without changing the folded purple V, its beautiful material, proportions, color, or the pale warm-white squircle tile. The ONLY correction: clean the outer silhouette and transparency. Remove ALL stray pale flecks, fuzz, scattered noise, rough patches and extra pixels outside the single perfectly smooth squircle tile. The exterior must be perfectly transparent with clean antialiased edges and only one restrained smooth continuous lower drop shadow. The squircle contour must be immaculate at 1024px, with an even transparent margin. Keep the existing centered tile, mark, orientation and lighting. No text or new objects. This is final icon cleanup.
 
-## Selected mark: logo.png and app-icon.png
+## Original selected mark: logo-original.png
 
 Mode: edit, transparent. Reference: tile study. The transparent standalone V is the final selected mark and app icon. The native `.icns` variants are ordinary size conversions of this PNG.
 
 > Create the final standalone Velinshot logo mark, using ONLY the folded purple V from the reference. Remove the entire white tile/squircle and ALL cast shadows. The output is only one clean V-shaped folded ribbon on true transparent background. Preserve the premium purple and lavender folded-paper V from the reference: left arm light lavender, V bend low in the center, tall right arm iris purple turning over gently. Clean smooth vector-like silhouette, simple precise fold planes, no texture or noise, no outer glow, no particles, no text, no squircle, no white background, no ground plane, no shadows anywhere outside the V. Internal fold shading is fine. The mark fills 76% of a square canvas and is optically centered, fully isolated on transparent background. Edges must be immaculate, with no stray pixels or fragments. This is a final brand logo and native app icon; prioritize clean outline and tiny-size recognition.
 
-## Brand board: brand-kit.png
+## Brand board study: brand-kit-exploration.png
 
 Mode: edit/composition, opaque. Reference: selected transparent logo as identity reference. This board includes illustrative light/dark tile applications; the shipped icon is the standalone V.
 
@@ -35,3 +35,11 @@ Mode: edit/composition, opaque. Reference: selected transparent logo as identity
 ## Other assets
 
 The editable light/dark SVG wordmarks compose the selected PNG and the included licensed Manrope face. Palette files are authored from the printed brand values. Native editor captures use the running app and its synthetic fixture rather than image generation.
+
+## Canonical refinement: logo.png and app-icon.png
+
+Reference: the original selected mark, now retained as logo-original.png. The first glow refinement was rejected and is kept only in work. This cleaner master is reused unchanged in every composed asset.
+
+> Create the final flat VECTOR-STYLE master of this original folded V logo. Keep its recognizable folded V ribbon silhouette and balance. EXACTLY THREE SOLID COLOR FILLS: iris #7160E8, light lavender #B7AEF8, deep violet #5140B5. Extremely crisp geometric edges and clean fold seams, high-end modern macOS identity, minimal and perfectly readable at 16 pixels. No gradients whatsoever. No shading. No lighting. No glow or bloom whatsoever. No shadow whatsoever. No blur or feathering. No translucent haze. Everything outside the clean V silhouette must be fully transparent. No tile, no background, no text, no framing, no extra objects. Center the single freestanding mark with generous fully transparent margins. Precision flat brand symbol, not a 3D render.
+
+The current brand-kit.svg/png and wordmark SVG/PNG files are deterministic graphic compositions of this exact canonical PNG and the included Manrope font. They do not redraw the mark. The previous generated board is retained as brand-kit-exploration.png.
