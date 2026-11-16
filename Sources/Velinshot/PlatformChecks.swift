@@ -72,6 +72,12 @@ enum PlatformChecks {
         try check(resized.points == [CGPoint(x:20,y:30),CGPoint(x:220,y:180)],"resize maps both arrow endpoints to the new box")
         try check(resized.id == arrow.id,"resize preserves annotation identity for undo")
         let png = try ImageExporter.data(image:source,format:.png)
+        let acceptedJPEG = directory.appendingPathComponent("rapid-switch.png.jpg")
+        let acceptedPNG = directory.appendingPathComponent("rapid-switch.png")
+        try check(ExportAccessory.encoding(for:acceptedJPEG,selected:.png) == .jpeg,"accepted JPEG extension wins a late PNG picker callback")
+        try check(ExportAccessory.encoding(for:acceptedPNG,selected:.jpeg) == .png,"accepted PNG extension wins a late JPEG picker callback")
+        let matchedJPEG = try ImageExporter.data(image:source,format:ExportAccessory.encoding(for:acceptedJPEG,selected:.png))
+        try check(matchedJPEG.starts(with:[0xff,0xd8]),"rapid format switching cannot write PNG bytes under a JPEG extension")
         let promise = ScreenshotPromise(data:png)
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }

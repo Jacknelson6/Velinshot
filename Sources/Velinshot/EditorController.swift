@@ -475,7 +475,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         isSaving = true
         defer { isSaving = false }
         canvas.finishText()
-        let panel = NSSavePanel();panel.title = "Save screenshot";panel.canCreateDirectories = true;panel.isExtensionHidden = false
+        let panel = NSSavePanel();panel.title = "Save screenshot";panel.canCreateDirectories = true;panel.isExtensionHidden = false;panel.allowsOtherFileTypes = false
         panel.directoryURL = preferences.directory
         let format = ExportAccessory(format:preferences.jpegByDefault ? .jpeg : .png,quality:preferences.quality)
         panel.accessoryView = format
@@ -493,9 +493,10 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         do {
             let image:CGImage
             if original { image = source } else { image = try renderedImage() }
-            let data = try ImageExporter.data(image:image,format:format.format,quality:format.quality)
+            let savedFormat = ExportAccessory.encoding(for:url,selected:format.format)
+            let data = try ImageExporter.data(image:image,format:savedFormat,quality:format.quality)
             try data.write(to:url,options:.atomic)
-            preferences.directory = url.deletingLastPathComponent();preferences.jpegByDefault = format.format == .jpeg;preferences.quality = format.quality
+            preferences.directory = url.deletingLastPathComponent();preferences.jpegByDefault = savedFormat == .jpeg;preferences.quality = format.quality
             let historyOK = persistHistory();playSound()
             setStatus(historyOK ? "Saved \(url.lastPathComponent)" : "Saved file. History not saved: \(historyFailure ?? "Choose another folder in Settings.")",error:!historyOK)
         } catch { showError(error) }
@@ -590,11 +591,19 @@ final class ExportAccessory: NSView {
     var onFormatChange: (() -> Void)?
     var format: ImageFormat { picker.indexOfSelectedItem == 0 ? .png : .jpeg }
     var quality: Double { qualitySlider.doubleValue }
+    static func encoding(for destination:URL,selected:ImageFormat) -> ImageFormat {
+        switch destination.pathExtension.lowercased() {
+        case "png":return .png
+        case "jpg","jpeg":return .jpeg
+        default:return selected
+        }
+    }
     init(format:ImageFormat,quality:Double) {
         super.init(frame:CGRect(x:0,y:0,width:340,height:64))
         picker.addItems(withTitles:["PNG · Lossless, supports transparency","JPEG · Smaller file, white transparency"])
         picker.selectItem(at:format == .png ? 0 : 1);picker.target = self;picker.action = #selector(changed)
         qualitySlider.doubleValue = quality;qualitySlider.setAccessibilityLabel("JPEG quality")
+        qualitySlider.isEnabled = format == .jpeg
         let stack = NSStackView(views:[picker,NSStackView(views:[Brand.label("JPEG quality"),qualitySlider])]);stack.orientation = .vertical;stack.spacing = 8
         addSubview(stack);stack.pin(to:self,inset:4)
     }
