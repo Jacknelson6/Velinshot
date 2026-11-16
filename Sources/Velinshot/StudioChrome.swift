@@ -127,13 +127,18 @@ final class StudioSegments:NSSegmentedControl {
 final class StudioColorWell:NSColorWell {
     override func draw(_ dirtyRect:NSRect) {
         let sample = CGRect(x:6,y:bounds.midY-8,width:16,height:16)
+        NSColor.secondaryLabelColor.withAlphaComponent(0.65).setFill()
+        NSBezierPath(ovalIn:sample).fill()
+        let inside = sample.insetBy(dx:1.5,dy:1.5)
         NSGraphicsContext.saveGraphicsState()
-        NSBezierPath(roundedRect:sample,xRadius:4,yRadius:4).addClip()
-        for y in 0..<4 { for x in 0..<4 {
-            ((x+y).isMultiple(of:2) ? NSColor.secondaryLabelColor.withAlphaComponent(0.55) : NSColor.windowBackgroundColor).setFill()
-            CGRect(x:sample.minX+CGFloat(x)*4,y:sample.minY+CGFloat(y)*4,width:4,height:4).fill()
-        } }
-        color.setFill();NSBezierPath(roundedRect:sample.insetBy(dx:2,dy:2),xRadius:2,yRadius:2).fill()
+        NSBezierPath(ovalIn:inside).addClip()
+        if color.alphaComponent < 1 {
+            for y in 0..<4 { for x in 0..<4 {
+                ((x+y).isMultiple(of:2) ? NSColor.lightGray : NSColor.white).setFill()
+                CGRect(x:inside.minX+CGFloat(x)*4,y:inside.minY+CGFloat(y)*4,width:4,height:4).fill()
+            } }
+        }
+        color.setFill();inside.fill()
         NSGraphicsContext.restoreGraphicsState()
         let rgb = color.usingColorSpace(.sRGB)
         func channel(_ value:CGFloat) -> Int { value.isFinite ? Int((min(1,max(0,value))*255).rounded()) : 0 }
