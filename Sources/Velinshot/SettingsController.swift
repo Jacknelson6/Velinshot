@@ -26,7 +26,7 @@ final class SettingsController: NSWindowController,NSTextFieldDelegate {
         errorLabel.stringValue = [shortcuts.captureError,shortcuts.quickCopyError].compactMap{$0}.joined(separator:"\n")
         errorLabel.isHidden = errorLabel.stringValue.isEmpty
         captureRecorder?.shortcut = AppSettings.shared.captureShortcut;copyRecorder?.shortcut = AppSettings.shared.quickCopyShortcut
-        permissionLabel.stringValue = CGPreflightScreenCaptureAccess() ? "Screen capture access is enabled." : "Screen capture access is required before capturing. Image editing works without it."
+        permissionLabel.stringValue = CGPreflightScreenCaptureAccess() ? "Screen capture access is enabled." : "This app copy needs capture access. If the macOS switch is already on, remove its entry and add this copy again."
         loginButton?.state = SMAppService.mainApp.status == .enabled ? .on : .off
         onRefresh?()
     }
@@ -66,6 +66,7 @@ final class SettingsController: NSWindowController,NSTextFieldDelegate {
             if let url = URL(string:"x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(url) }
         }
         add(NSStackView(views:[permission,openSettings]))
+        add(ActionButton(title:"Show This App in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) })
         add(section("Workflow"))
         add(check("Close screenshot after copying",value:AppSettings.shared.closeAfterCopy){AppSettings.shared.closeAfterCopy = $0})
         add(check("Hide Velinshot windows while capturing",value:AppSettings.shared.hideDuringCapture){AppSettings.shared.hideDuringCapture = $0})

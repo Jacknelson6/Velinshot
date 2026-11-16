@@ -6,7 +6,7 @@ enum CaptureFailure: LocalizedError {
     case permission, noDisplay, tooLarge, cancelled
     var errorDescription: String? {
         switch self {
-        case .permission: return "Open Velinshot Settings and choose Request capture access, then allow Velinshot in macOS Screen Recording settings. Reopen the app if macOS asks."
+        case .permission: return "macOS has not authorized this copy of Velinshot. If access already looks enabled, remove its entry from Screen & System Audio Recording, add this app again, and enable it. Restart Velinshot after changing access."
         case .noDisplay: return "No display was available to capture. Connect a display and try again."
         case .tooLarge: return "That capture is too large. Select a smaller area (up to 40 megapixels)."
         case .cancelled: return nil

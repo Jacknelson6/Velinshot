@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let open = ActionButton(title:"Open Image…",symbol:"folder") { [weak self] in self?.openImage() }
         let buttons = NSStackView(views:[capture,open]);buttons.spacing = 12
         let paste = ActionButton(title:"Open from Clipboard") { [weak self] in self?.openClipboard() };paste.isBordered = false
-        let settings = ActionButton(title:shortcuts.captureError == nil ? "Settings" : "⌘4 is in use. Choose a shortcut in Settings.") { [weak self] in self?.showSettings() };settings.isBordered = false;settings.contentTintColor = shortcuts.captureError == nil ? .secondaryLabelColor : .systemOrange
+        let settings = ActionButton(title:shortcuts.captureError == nil ? "Settings" : "Could not register \(AppSettings.shared.captureShortcut.display). Open Settings.") { [weak self] in self?.showSettings() };settings.isBordered = false;settings.contentTintColor = shortcuts.captureError == nil ? .secondaryLabelColor : .systemOrange
         welcomeShortcutNote = settings
         let stack = NSStackView(views:[logo,headline,subline,buttons,paste,settings]);stack.orientation = .vertical;stack.spacing = 16;stack.alignment = .centerX
         root.addSubview(stack);stack.translatesAutoresizingMaskIntoConstraints = false
@@ -169,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
     private func refreshWelcomeShortcuts() {
         welcomeCapture?.title = "Capture  \(AppSettings.shared.captureShortcut.display)"
-        welcomeShortcutNote?.title = shortcuts.captureError == nil ? "Settings" : "\(AppSettings.shared.captureShortcut.display) is in use. Choose a shortcut in Settings."
+        welcomeShortcutNote?.title = shortcuts.captureError == nil ? "Settings" : "Could not register \(AppSettings.shared.captureShortcut.display). Open Settings."
         welcomeShortcutNote?.contentTintColor = shortcuts.captureError == nil ? .secondaryLabelColor : .systemOrange
     }
     static func backgroundImage(for id:String?) -> CGImage? {
@@ -288,6 +288,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
     private func showCaptureError(_ error:Error) {
         let alert = NSAlert();alert.messageText = "Capture needs your attention";alert.informativeText = error.localizedDescription
+        if let failure = error as? CaptureFailure,case .permission = failure {
+            alert.addButton(withTitle:"Open macOS Settings");alert.addButton(withTitle:"Show This App");alert.addButton(withTitle:"Later")
+            NSApp.activate(ignoringOtherApps:true)
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:
+                if let url = URL(string:"x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(url) }
+            case .alertSecondButtonReturn: NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+            default: break
+            }
+            return
+        }
         alert.addButton(withTitle:"Open Settings");alert.addButton(withTitle:"Later")
         NSApp.activate(ignoringOtherApps:true)
         if alert.runModal() == .alertFirstButtonReturn { showSettings() }
