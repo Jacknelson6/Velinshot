@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest a clearer or faster screenshot workflow.
+title: "[Idea] "
+body:
+  - type: textarea
+    id: job
+    attributes:
+      label: What are you trying to do?
+      description: Describe the screenshot workflow and where it slows you down.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would improve it?

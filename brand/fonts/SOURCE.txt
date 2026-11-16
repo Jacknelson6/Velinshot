@@ -1,0 +1,3 @@
+Manrope variable font and OFL: https://github.com/google/fonts/tree/main/ofl/manrope
+Downloaded 2026-11-15. SHA256: 3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6
+Interface SF Pro is provided by macOS and is not redistributed.

@@ -1,0 +1,22 @@
+name: Bug report
+description: Help make a capture, edit or export work correctly.
+title: "[Bug] "
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the steps, expected result and actual result. Synthetic screenshots work best.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Velinshot version and macOS version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction details
+      description: Capture mode, image dimensions, style, export type and any visible error.
