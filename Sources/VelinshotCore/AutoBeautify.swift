@@ -2,6 +2,73 @@ import AppKit
 import CoreGraphics
 
 public enum AutoBeautify {
+    /// Selects a dominant visible edge palette color without mixing unrelated bins.
+    /// Crop coordinates are in the original source's top-left pixel space.
+    public static func suggestInsetColor(source: CGImage, crop: CGRect? = nil) -> RGBA {
+        let white = RGBA(red: 1, green: 1, blue: 1)
+        let visibleSource: CGImage
+        if let crop {
+            guard crop.origin.x.isFinite, crop.origin.y.isFinite,
+                  crop.size.width.isFinite, crop.size.height.isFinite,
+                  crop.size.width > 0, crop.size.height > 0, !crop.isInfinite else { return white }
+            let bounds = CGRect(x: 0, y: 0, width: source.width, height: source.height)
+            let clipped = crop.intersection(bounds).integral.intersection(bounds)
+            guard !clipped.isNull, !clipped.isEmpty,
+                  let image = source.cropping(to: clipped) else { return white }
+            visibleSource = image
+        } else {
+            visibleSource = source
+        }
+        guard let sample = PixelSample(source: visibleSource, maximumDimension: 64) else { return white }
+
+        struct Bin {
+            var weight = 0
+            var red = 0.0
+            var green = 0.0
+            var blue = 0.0
+        }
+        var bins: [UInt16: Bin] = [:]
+        let band = max(1, min(sample.width, sample.height) / 8)
+        func collect(edgesOnly: Bool) {
+            for y in 0..<sample.height {
+                for x in 0..<sample.width {
+                    if edgesOnly && !(x < band || x >= sample.width - band ||
+                                      y < band || y >= sample.height - band) { continue }
+                    let pixel = sample.pixel(x: x, y: y)
+                    let alpha = Int(pixel.3)
+                    guard alpha >= 26 else { continue }
+                    let red = min(1, max(0, Double(pixel.0) / Double(alpha)))
+                    let green = min(1, max(0, Double(pixel.1) / Double(alpha)))
+                    let blue = min(1, max(0, Double(pixel.2) / Double(alpha)))
+                    func channel5(_ value: Double) -> UInt16 {
+                        UInt16(min(255, max(0, Int((value * 255).rounded()))) >> 3)
+                    }
+                    let key = (channel5(red) << 10) | (channel5(green) << 5) | channel5(blue)
+                    var bin = bins[key] ?? Bin()
+                    bin.weight += alpha
+                    bin.red += red * Double(alpha)
+                    bin.green += green * Double(alpha)
+                    bin.blue += blue * Double(alpha)
+                    bins[key] = bin
+                }
+            }
+        }
+        collect(edgesOnly: true)
+        if bins.isEmpty { collect(edgesOnly: false) }
+        var winner = Bin()
+        var winnerKey = UInt16.max
+        for (key, bin) in bins {
+            if bin.weight > winner.weight || (bin.weight == winner.weight && key < winnerKey) {
+                winner = bin
+                winnerKey = key
+            }
+        }
+        guard winner.weight > 0 else { return white }
+        let weight = Double(winner.weight)
+        return RGBA(red: winner.red / weight, green: winner.green / weight,
+                    blue: winner.blue / weight, alpha: 1)
+    }
+
     public static func suggestColors(source: CGImage) -> (RGBA, RGBA) {
         guard let sample = PixelSample(source: source, maximumDimension: 64) else {
             return (RGBA(hex: "B7AEF8"), RGBA(hex: "E6E3FF"))
