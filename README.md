@@ -44,6 +44,19 @@ Local OCR lets you select and copy the words in your image. Automatic PII detect
 
 <sub>Real native views, shown with the same synthetic screenshot.</sub>
 
+## Download and open
+
+[Download the Apple Silicon preview](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.1/Velinshot-preview-arm64.zip) for macOS 14 or later. Unzip it and put **Velinshot.app** in your chosen location before opening it or granting capture access.
+
+The preview is ad-hoc signed and **not notarized** by Apple. If macOS says it could not verify Velinshot:
+
+1. Click **Done** in the blocked-opening alert.
+2. Open **System Settings → Privacy & Security** and scroll to **Security**.
+3. Click **Open Anyway** beside the Velinshot message.
+4. Confirm the next opening prompt. Use Touch ID or your Mac login password if macOS asks.
+
+This saves an exception for this app on your Mac. See [Apple's app-opening instructions](https://support.apple.com/en-us/102445). This first-launch approval is separate from Screen Recording permission.
+
 ## Make it yours
 
 Requires macOS 14 or later. The packaged build targets Apple Silicon; the source can be built on a compatible Mac with Apple's Swift toolchain.
@@ -55,7 +68,7 @@ bash scripts/build-app.sh
 open build/Velinshot.app
 ```
 
-The build script makes an app bundle with a local ad-hoc signature. A Developer ID and Apple notarization are not included. Downloaded builds may require macOS's normal approval to open; building locally avoids depending on a distribution signing service.
+The build script makes an app bundle with a local ad-hoc signature. A Developer ID and Apple notarization are not included. Downloaded builds use the [first-launch approval above](#download-and-open).
 
 On first capture, allow **Velinshot** in **System Settings → Privacy & Security → Screen & System Audio Recording**. The Settings window has a shortcut to that pane. macOS may require a relaunch, and a newly rebuilt ad-hoc app may need consent again.
 
