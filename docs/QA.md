@@ -8,6 +8,8 @@ The current editor candidate passes **115 core scenario bodies, 10 assertion fai
 
 This Mac has Command Line Tools without XCTest or Swift Testing. `scripts/core-checks.py` runs the same source scenario bodies in an explicitly identified native assertion harness. Unsupported constructs fail rather than being skipped. These are not reported as XCTest results. Hosted full-Xcode CI runs XCTest separately.
 
+Hosted verification uses GitHub's standard Intel macOS 15 pool with the same XCTest, release-build and bundle checks. The packaged Desktop app and local native checks remain Apple Silicon. The earlier [arm64 run](https://github.com/Jacknelson6/Velinshot/actions/runs/43932839859) never acquired a runner; GitHub reported arm64 capacity constraints before any test step ran. Architecture and local/hosted results are recorded separately.
+
 ## Native behavior
 
 The finite `--smoke-check <directory>` path uses isolated preferences, synthetic images, a private pasteboard and hidden native views. It checks all drawing tools, document/field undo, coalesced sliders, text cancellation, source-coordinate crop/resize, URL settings, real OS hotkey registration and occupied-key retry, promised PNG data/files, refusal to overwrite, accepted save-extension encoding, optional history failure, worker cancellation and batch presentation ordering. Interrupted strokes and delayed mouse-up after undo cannot leave stale annotation indexes.
