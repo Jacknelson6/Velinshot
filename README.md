@@ -1,4 +1,5 @@
 <div align="center">
+  <p><img src="Resources/AppIcon.png" alt="Velin logo" width="96" height="96"></p>
   <h1>Velinshot</h1>
   <p>Free, native screenshot editing for macOS.</p>
   <p>
