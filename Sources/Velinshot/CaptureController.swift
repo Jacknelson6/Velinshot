@@ -6,7 +6,7 @@ enum CaptureFailure: LocalizedError {
     case permission, noDisplay, tooLarge, cancelled
     var errorDescription: String? {
         switch self {
-        case .permission: return "Allow Velinshot in System Settings → Privacy & Security → Screen & System Audio Recording, then try again. macOS may ask you to reopen the app."
+        case .permission: return "Open Velinshot Settings and choose Request capture access, then allow Velinshot in macOS Screen Recording settings. Reopen the app if macOS asks."
         case .noDisplay: return "No display was available to capture. Connect a display and try again."
         case .tooLarge: return "That capture is too large. Select a smaller area (up to 40 megapixels)."
         case .cancelled: return nil
@@ -28,14 +28,17 @@ final class CaptureController {
     private(set) var isCapturing = false
 
     func begin(_ mode: Mode = .area, completion: @escaping (Result<CGImage, Error>) -> Void) {
+        guard NSApp.modalWindow == nil else { NSSound.beep();return }
         guard !isCapturing else { return }
         isCapturing = true
         self.completion = completion
-        previousWindows = NSApp.windows.filter { $0.isVisible && !($0 is CaptureOverlayWindow) }
-        if AppSettings.shared.hideDuringCapture { previousWindows.forEach { $0.orderOut(nil) } }
+        previousWindows = AppSettings.shared.hideDuringCapture ? NSApp.windows.filter { $0.isVisible && $0.styleMask.contains(.titled) && !($0 is CaptureOverlayWindow) } : []
+        previousWindows.forEach { $0.orderOut(nil) }
         Task { @MainActor in
             do {
-                guard CGPreflightScreenCaptureAccess() else { throw CaptureFailure.permission }
+                if !CGPreflightScreenCaptureAccess() {
+                    guard CGRequestScreenCaptureAccess() else { throw CaptureFailure.permission }
+                }
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
                 self.content = content
                 guard !content.displays.isEmpty else { throw CaptureFailure.noDisplay }

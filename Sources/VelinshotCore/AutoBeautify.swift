@@ -73,7 +73,17 @@ public enum AutoBeautify {
 struct PixelSample {
     let width: Int
     let height: Int
-    let bytes: [UInt8]
+    private let context: CGContext
+    private let storage: UnsafePointer<UInt8>
+
+    // Materialize bytes only for consumers that explicitly need an owned copy.
+    // Color and content analysis read the retained bitmap directly instead of
+    // allocating a second full-size buffer for every capture.
+    var bytes: [UInt8] {
+        withExtendedLifetime(context) {
+            Array(UnsafeBufferPointer(start: storage, count: width * height * 4))
+        }
+    }
 
     init?(source: CGImage, maximumDimension: Int? = nil) {
         let scale = maximumDimension.map { min(1, Double($0) / Double(max(source.width, source.height))) } ?? 1
@@ -85,11 +95,16 @@ struct PixelSample {
         context.interpolationQuality = .high
         context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
         guard let data = context.data else { return nil }
-        bytes = Array(UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self), count: width * height * 4))
+        self.context = context
+        storage = UnsafePointer(data.assumingMemoryBound(to: UInt8.self))
     }
 
     func pixel(x: Int, y: Int) -> (UInt8, UInt8, UInt8, UInt8) {
-        let offset = (y * width + x) * 4
-        return (bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3])
+        // All callers traverse valid bitmap coordinates. The owning CGContext
+        // stays alive through each read, including when a sample value is copied.
+        withExtendedLifetime(context) {
+            let offset = (y * width + x) * 4
+            return (storage[offset], storage[offset + 1], storage[offset + 2], storage[offset + 3])
+        }
     }
 }

@@ -57,6 +57,11 @@ enum PlatformChecks {
         field.stringValue = "C and S stay text"
         canvas.finishText()
         try check(canvas.state.annotations.last?.text == "C and S stay text","text entry preserves shortcut letters")
+        canvas.state = baseline;canvas.tool = .text
+        canvas.mouseDown(with:try event(.leftMouseDown,start))
+        canvas.subviews.compactMap{$0 as? NSTextField}.first?.stringValue = "Cancelled text must stay absent"
+        canvas.finishText(cancel:true)
+        try check(canvas.state.annotations.isEmpty,"cancelled text never commits through a reentrant end-edit notification")
         canvas.state = baseline;canvas.tool = .crop
         canvas.mouseDown(with:try event(.leftMouseDown,start));canvas.mouseDragged(with:try event(.leftMouseDragged,end));canvas.mouseUp(with:try event(.leftMouseUp,end))
         try check(canvas.state.crop != nil,"crop gesture commits a source-space crop")
@@ -82,6 +87,64 @@ enum PlatformChecks {
         try check(promisedImage.width == source.width && promisedImage.height == source.height,"promised file is a valid image")
         promise.writer.filePromiseProvider(promise,writePromiseTo:promisedURL){writeError = $0}
         try check(writeError != nil,"promised-file writer refuses to overwrite an existing file")
+
+        let editor = EditorController(source:source,state:baseline,preferences:preferences,supportDirectory:directory)
+        guard let editorWindow = editor.window else { throw VelinshotError.invalidImage("Editor window construction failed.") }
+        editorWindow.contentView?.layoutSubtreeIfNeeded()
+        let undo = editor.windowWillReturnUndoManager(editorWindow)
+        undo?.groupsByEvent = false
+        let editorCanvas = editor.canvas
+        let editorStart = CGPoint(x:editorCanvas.bounds.midX-50,y:editorCanvas.bounds.midY-25)
+        let editorEnd = CGPoint(x:editorCanvas.bounds.midX+70,y:editorCanvas.bounds.midY+30)
+        func editorEvent(_ type:NSEvent.EventType,_ point:CGPoint) throws -> NSEvent {
+            guard let event = NSEvent.mouseEvent(with:type,location:editorCanvas.convert(point,to:nil),modifierFlags:[],timestamp:ProcessInfo.processInfo.systemUptime,windowNumber:editorWindow.windowNumber,context:nil,eventNumber:2,clickCount:1,pressure:1) else { throw VelinshotError.invalidImage("Cannot create editor test event.") }
+            return event
+        }
+        editorCanvas.tool = .arrow
+        undo?.beginUndoGrouping()
+        editorCanvas.mouseDown(with:try editorEvent(.leftMouseDown,editorStart));editorCanvas.mouseDragged(with:try editorEvent(.leftMouseDragged,editorEnd));editorCanvas.mouseUp(with:try editorEvent(.leftMouseUp,editorEnd))
+        undo?.endUndoGrouping()
+        try check(editor.state.annotations.count == 1,"integrated editor routes a canvas gesture into the document")
+        editor.undoEdit();try check(editor.state.annotations.isEmpty,"integrated document undo removes the arrow")
+        editor.redoEdit();try check(editor.state.annotations.count == 1,"integrated document redo restores the arrow")
+        func findSlider(_ view:NSView) -> GestureSlider? {
+            if let slider = view as? GestureSlider,slider.identifier?.rawValue == "padding" { return slider }
+            return view.subviews.compactMap{findSlider($0)}.first
+        }
+        guard let slider = editorWindow.contentView.flatMap({findSlider($0)}) else { throw VelinshotError.invalidImage("Padding slider was not built.") }
+        let oldPadding = editor.state.style.padding
+        undo?.beginUndoGrouping()
+        slider.onBegin?()
+        for value in [70.0,90,120,150] { slider.doubleValue = value;_ = slider.sendAction(slider.action,to:slider.target) }
+        slider.onEnd?()
+        undo?.endUndoGrouping()
+        try check(editor.state.style.padding == 150,"integrated slider updates the visible style")
+        editor.undoEdit()
+        try check(editor.state.style.padding == oldPadding,"one undo restores an entire slider drag")
+        try check(editor.state.annotations.count == 1,"slider undo preserves earlier annotation history")
+        editor.undoEdit();try check(editor.state.annotations.isEmpty,"earlier annotation undo survives the slider gesture")
+        editor.redoEdit()
+        undo?.beginUndoGrouping()
+        editorCanvas.tool = .text
+        editorCanvas.mouseDown(with:try editorEvent(.leftMouseDown,editorStart))
+        guard let editorField = editorCanvas.subviews.compactMap({$0 as? NSTextField}).first else { throw VelinshotError.invalidImage("Integrated text tool did not create a field.") }
+        if let textView = editorField.currentEditor() as? NSTextView {
+            textView.insertText("Typed C and S",replacementRange:NSRange(location:NSNotFound,length:0))
+        } else { editorField.stringValue = "Typed C and S" }
+        editorCanvas.finishText()
+        undo?.endUndoGrouping()
+        try check(editor.state.annotations.count == 2,"integrated text entry commits one mark")
+        editor.undoEdit()
+        try check(editor.state.annotations.count == 1,"document undo removes the committed text mark")
+        editor.redoEdit()
+        try check(editor.state.annotations.count == 2,"document redo restores committed text")
+        let blockedHistory = directory.appendingPathComponent("not-a-history-directory")
+        try Data("This file must be preserved".utf8).write(to:blockedHistory,options:.atomic)
+        preferences.historyDirectory = blockedHistory;preferences.historyEnabled = true
+        try check(!editor.persistHistory(),"an unwritable history destination is reported as a history failure")
+        try check(editor.state.annotations.count == 2,"history failure preserves the working document")
+        preferences.historyEnabled = false;preferences.historyDirectory = firstHistory
+        editor.close()
         print("\(count) platform integration checks passed in isolated settings and hidden native views.")
         return count
     }

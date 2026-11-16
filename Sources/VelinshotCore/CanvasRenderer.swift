@@ -85,10 +85,17 @@ public enum CanvasRenderer {
             throw VelinshotError.renderingFailed
         }
         context.interpolationQuality = .high
+        if state.style.background == .solid || (state.style.background == .image && backgroundImage == nil) {
+            // Cover the complete integer bitmap before applying a fractional
+            // composition transform. Preserve the selected color's alpha.
+            context.setFillColor(state.style.color1.cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+        }
         context.translateBy(x: 0, y: CGFloat(pixelHeight))
         context.scaleBy(x: scale, y: -scale)
         let canvasRect = CGRect(origin: .zero, size: layout.canvasSize)
-        drawBackground(state.style, image: backgroundImage, rect: canvasRect, context: context)
+        let bitmapRect = CGRect(x: 0, y: 0, width: CGFloat(pixelWidth) / scale, height: CGFloat(pixelHeight) / scale)
+        drawBackground(state.style, image: backgroundImage, rect: canvasRect, bitmapRect: bitmapRect, context: context)
 
         let radius = min(CGFloat(state.style.cornerRadius), min(layout.panelRect.width, layout.panelRect.height) / 2)
         let panelPath = CGPath(roundedRect: layout.panelRect, cornerWidth: radius, cornerHeight: radius, transform: nil)
@@ -222,12 +229,11 @@ public enum CanvasRenderer {
         drawText(visible, at: point, color: style.watermarkColor.nsColor, size: Double(fontSize), context: context)
     }
 
-    private static func drawBackground(_ style: CanvasStyle, image: CGImage?, rect: CGRect, context: CGContext) {
+    private static func drawBackground(_ style: CanvasStyle, image: CGImage?, rect: CGRect, bitmapRect: CGRect, context: CGContext) {
         switch style.background {
         case .transparent: break
         case .solid:
-            context.setFillColor(style.color1.cgColor)
-            context.fill(rect)
+            break // Filled once in device space before the composition transform.
         case .gradient:
             let colors = [style.color1.cgColor, style.color2.cgColor] as CFArray
             guard let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: colors, locations: [0, 1]) else { return }
@@ -241,14 +247,10 @@ public enum CanvasRenderer {
                 end: CGPoint(x: center.x + dx * distance, y: center.y + dy * distance),
                 options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
         case .image:
-            guard let image else {
-                context.setFillColor(style.color1.cgColor)
-                context.fill(rect)
-                return
-            }
-            let scale = max(rect.width / CGFloat(image.width), rect.height / CGFloat(image.height))
+            guard let image else { return } // Its fallback color was filled in device space.
+            let scale = max(bitmapRect.width / CGFloat(image.width), bitmapRect.height / CGFloat(image.height))
             let size = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
-            drawImage(image, in: CGRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2,
+            drawImage(image, in: CGRect(x: bitmapRect.midX - size.width / 2, y: bitmapRect.midY - size.height / 2,
                                        width: size.width, height: size.height), context: context)
         }
     }

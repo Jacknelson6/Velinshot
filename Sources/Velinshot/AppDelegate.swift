@@ -134,9 +134,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                         let output = try CanvasRenderer.render(source:image,state:state,backgroundImage:background)
                         let board = NSPasteboard.general;board.clearContents()
                         guard board.writeObjects([NSImage(cgImage:output,size:CGSize(width:output.width,height:output.height))]) else { throw VelinshotError.invalidImage("Clipboard is busy. Try again.") }
-                        let entry = AppSettings.shared.historyEnabled ? try HistoryStore(directory:AppSettings.shared.historyDirectory).save(image:image,state:state) : nil
+                        var entry:HistoryEntry?
+                        var historyError:Error?
+                        if AppSettings.shared.historyEnabled {
+                            do { entry = try HistoryStore(directory:AppSettings.shared.historyDirectory).save(image:image,state:state) }
+                            catch { historyError = error }
+                        }
                         self?.lastClosed = ClosedScreenshot(image:image,state:state,title:"Screenshot",historyEntry:entry,historyDirectory:AppSettings.shared.historyDirectory)
                         if AppSettings.shared.sound { NSSound(named:"Pop")?.play() }
+                        if let historyError {
+                            let alert = NSAlert();alert.messageText = "Copied, but history was not saved";alert.informativeText = historyError.localizedDescription+" Choose another history folder in Settings. You can still reopen the screenshot from File → Reopen Closed Screenshot."
+                            alert.runModal()
+                        }
                     } catch { self?.showError(error) }
                 } else { self?.present(image) }
             case .failure(let error):

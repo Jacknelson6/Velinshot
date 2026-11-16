@@ -59,6 +59,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     var onBackgroundDoubleClick:(() -> Void)?
     var onSelection:((Annotation?) -> Void)?
     var onKey:((NSEvent)->Bool)?
+    var onTextEditingChange:((Bool)->Void)?
     private var preview: CGImage?
     private var renderTask: DispatchWorkItem?
     private var renderTicket: PreviewTicket?
@@ -257,6 +258,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         gestureBefore = nil; gestureStart = nil; draftIndex = nil; cropDraft = nil;resizeCorner = nil; needsDisplay = true
     }
     private func startText(at point: CGPoint,annotationIndex:Int? = nil) {
+        onTextEditingChange?(true)
         textOrigin = point
         textAnnotationIndex = annotationIndex
         let position = viewPoint(point)
@@ -271,16 +273,19 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     func finishText(cancel: Bool = false) {
         guard let field = textField else { return }
         let text = field.stringValue
-        field.removeFromSuperview(); textField = nil
-        if !cancel, let point = textOrigin {
-            if let index = textAnnotationIndex,state.annotations.indices.contains(index) {
+        let origin = textOrigin,index = textAnnotationIndex
+        textField = nil;textOrigin = nil;textAnnotationIndex = nil
+        field.removeFromSuperview()
+        window?.makeFirstResponder(self)
+        if !cancel, let point = origin {
+            if let index,state.annotations.indices.contains(index) {
                 if text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty { state.annotations.remove(at:index) }
                 else { state.annotations[index].text = text }
             } else if !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {
                 state.annotations.append(Annotation(kind:.text,points:[point],color:annotationColor,lineWidth:lineWidth,text:text,fontSize:fontSize))
             }
         }
-        textOrigin = nil;textAnnotationIndex = nil; completeGesture()
+        completeGesture();onTextEditingChange?(false)
     }
     func controlTextDidEndEditing(_ obj: Notification) { finishText() }
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {

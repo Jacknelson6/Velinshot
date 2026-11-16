@@ -8,3 +8,5 @@ build/
 *.bundle
 .helm/
 .impeccable/review/
+__pycache__/
+*.pyc

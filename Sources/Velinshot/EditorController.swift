@@ -28,6 +28,8 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     var onImportData: ((Data) -> Void)?
     var historyEntry: HistoryEntry?
     private let editorUndo = UndoManager()
+    private let fieldUndo = UndoManager()
+    private var textEditingActive = false
     private var toolButtons: [EditorTool: NSButton] = [:]
     private var sliders: [String: NSSlider] = [:]
     private var valueLabels: [String: NSTextField] = [:]
@@ -49,15 +51,22 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private var dimensionsLabel = Brand.label("",size:11)
     private var ocrButton: NSButton!
     private var presets: [StylePreset] = []
-    private let presetStore = PresetStore(fileURL: AppSettings.supportDirectory.appendingPathComponent("presets.json"))
-    private var historyStore: HistoryStore { HistoryStore(directory: AppSettings.shared.historyDirectory) }
+    private let presetStore:PresetStore
+    private let preferences:AppSettings
+    private let supportDirectory:URL
+    private var historyStore: HistoryStore { HistoryStore(directory: preferences.historyDirectory) }
     private var infoWindow: NSWindow?
     private var userIsClosing = false
     private var isSaving = false
+    private var inspectorGestureBefore:EditState?
+    private var watermarkGestureBefore:EditState?
+    private var historyFailure:String?
 
-    init(source: CGImage, state: EditState? = nil, title: String = "Screenshot") {
+    init(source: CGImage, state: EditState? = nil, title: String = "Screenshot", preferences:AppSettings = .shared, supportDirectory:URL = AppSettings.supportDirectory) {
+        self.preferences = preferences;self.supportDirectory = supportDirectory
+        self.presetStore = PresetStore(fileURL:supportDirectory.appendingPathComponent("presets.json"))
         self.source = source
-        let initial = state ?? NewDocument.state(source:source,style:AppSettings.shared.style)
+        let initial = state ?? NewDocument.state(source:source,style:preferences.style)
         canvas = CanvasView(source:source,state:initial)
         let visible = NSScreen.main?.visibleFrame ?? CGRect(x:0,y:0,width:1200,height:800)
         let size = CGSize(width:min(950,visible.width-32),height:min(650,visible.height-32))
@@ -80,6 +89,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         canvas.onImportData = { [weak self] in self?.onImportData?($0) }
         canvas.onBackgroundDoubleClick = { [weak self] in self?.copyImage(forceClose:true) }
         canvas.onKey = { [weak self] in self?.handleKey($0) ?? false }
+        canvas.onTextEditingChange = { [weak self] active in self?.textEditingActive = active;self?.fieldUndo.removeAllActions() }
         canvas.onSelection = { [weak self] annotation in
             guard let self,let annotation else { return }
             self.annotationColorWell.color = annotation.color.nsColor
@@ -101,7 +111,10 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         NSApp.activate(ignoringOtherApps:true)
         window?.makeFirstResponder(canvas)
     }
-    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? { editorUndo }
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        if textEditingActive || (window.firstResponder as? NSTextView)?.isEditable == true { return fieldUndo }
+        return editorUndo
+    }
     func windowWillClose(_ notification: Notification) {
         canvas.finishText()
         persistHistory()
@@ -252,7 +265,12 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         let label = Brand.label(title)
         let value = Brand.label("",size:11);value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor
         let spacer = NSView();let top = NSStackView(views:[label,spacer,value]);top.distribution = .fill;top.alignment = .centerY
-        let slider = NSSlider(value:0,minValue:min,maxValue:max,target:self,action:#selector(sliderChanged));slider.identifier = .init(key);slider.isContinuous = true;slider.setAccessibilityLabel(title)
+        let slider = GestureSlider(value:0,minValue:min,maxValue:max,target:self,action:#selector(sliderChanged));slider.identifier = .init(key);slider.isContinuous = true;slider.setAccessibilityLabel(title)
+        slider.onBegin = { [weak self] in self?.canvas.finishText();self?.inspectorGestureBefore = self?.canvas.state }
+        slider.onEnd = { [weak self] in
+            guard let self,let before = self.inspectorGestureBefore else { return }
+            self.inspectorGestureBefore = nil;self.commit(before:before,after:self.canvas.state)
+        }
         sliders[key] = slider;valueLabels[key] = value
         let group = NSStackView(views:[top,slider]);group.orientation = .vertical;group.spacing = 5;group.alignment = .leading
         top.widthAnchor.constraint(equalTo:group.widthAnchor).isActive = true;slider.widthAnchor.constraint(equalTo:group.widthAnchor).isActive = true
@@ -272,7 +290,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         guard before != after else { return }
         editorUndo.registerUndo(withTarget:self) { target in target.restore(before) }
         editorUndo.setActionName("Edit screenshot")
-        AppSettings.shared.style = after.style
+        preferences.style = after.style
         syncInspector()
     }
     private func restore(_ state:EditState) {
@@ -285,7 +303,8 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         let before = canvas.state;var after = before;mutation(&after)
         do { _ = try CanvasRenderer.layout(sourceSize:CGSize(width:source.width,height:source.height),state:after) }
         catch { setStatus(error.localizedDescription,error:true);return }
-        canvas.state = after;commit(before:before,after:after)
+        canvas.state = after
+        if inspectorGestureBefore == nil && watermarkGestureBefore == nil { commit(before:before,after:after) } else { syncInspector() }
     }
     func undoEdit() { canvas.finishText();editorUndo.undo();syncInspector() }
     func redoEdit() { canvas.finishText();editorUndo.redo();syncInspector() }
@@ -336,6 +355,15 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         guard notification.object as? NSTextField === watermarkField else { return }
         let text = String(watermarkField.stringValue.prefix(512));change{$0.style.watermarkText = text}
     }
+    func controlTextDidBeginEditing(_ notification:Notification) {
+        guard notification.object as? NSTextField === watermarkField else { return }
+        watermarkGestureBefore = canvas.state;textEditingActive = true;fieldUndo.removeAllActions()
+    }
+    func controlTextDidEndEditing(_ notification:Notification) {
+        guard notification.object as? NSTextField === watermarkField else { return }
+        textEditingActive = false;fieldUndo.removeAllActions()
+        if let before = watermarkGestureBefore { watermarkGestureBefore = nil;commit(before:before,after:canvas.state) }
+    }
     private static let ratios:[(String,Double,Double)] = [("Original ratio",0,0),("4:3  Classic",4,3),("3:2  Photo",3,2),("1:1  Square",1,1),("4:5  Portrait",4,5),("9:16  Story",9,16),("16:9  Wide",16,9),("1.91:1  Social",1.91,1)]
     private static let sizes:[(String,Int,Int)] = [("Instagram · 1080 × 1080",1080,1080),("Portrait · 1080 × 1350",1080,1350),("Stories · 1080 × 1920",1080,1920),("X / Twitter · 1600 × 900",1600,900),("Facebook · 1200 × 630",1200,630),("LinkedIn · 1200 × 627",1200,627),("YouTube · 1280 × 720",1280,720),("Pinterest · 1000 × 1500",1000,1500),("Reddit · 1200 × 628",1200,628)]
     @objc private func ratioChanged(_ sender:NSPopUpButton) {
@@ -376,7 +404,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private func setBackground(url:URL) throws {
             let image = try ImageLoader.load(url:url)
             let data = try ImageExporter.data(image:image,format:.png)
-            let directory = AppSettings.supportDirectory.appendingPathComponent("Backgrounds",isDirectory:true)
+            let directory = supportDirectory.appendingPathComponent("Backgrounds",isDirectory:true)
             try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
             let id = UUID().uuidString
             try data.write(to:directory.appendingPathComponent(id+".png"),options:.atomic)
@@ -390,7 +418,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     }
     private func loadBackground() {
         guard let id = canvas.state.style.backgroundAssetID,UUID(uuidString:id) != nil else { canvas.backgroundImage = nil;return }
-        let url = AppSettings.supportDirectory.appendingPathComponent("Backgrounds",isDirectory:true).appendingPathComponent(id+".png")
+        let url = supportDirectory.appendingPathComponent("Backgrounds",isDirectory:true).appendingPathComponent(id+".png")
         do { canvas.backgroundImage = try ImageLoader.load(url:url) }
         catch { canvas.backgroundImage = nil;setStatus("Background image is missing. Choose it again.",error:true) }
     }
@@ -423,6 +451,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
     }
     func renderedImage() throws -> CGImage {
+        window?.makeFirstResponder(canvas)
         canvas.finishText()
         return try CanvasRenderer.render(source:source,state:canvas.state,backgroundImage:canvas.backgroundImage)
     }
@@ -435,8 +464,10 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             guard board.writeObjects([NSImage(cgImage:image,size:CGSize(width:image.width,height:image.height))]) else {
                 setStatus("Clipboard is busy. Try copying again.",error:true);return
             }
-            persistHistory();playSound();setStatus("Copied to clipboard")
-            if forceClose || AppSettings.shared.closeAfterCopy { close() }
+            let historyOK = persistHistory();playSound()
+            if !historyOK { setStatus("Copied. History not saved: \(historyFailure ?? "Choose another history folder in Settings.")",error:true);return }
+            setStatus("Copied to clipboard")
+            if forceClose || preferences.closeAfterCopy { close() }
         } catch { showError(error) }
     }
     func saveImage(original:Bool = false) {
@@ -445,8 +476,8 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         defer { isSaving = false }
         canvas.finishText()
         let panel = NSSavePanel();panel.title = "Save screenshot";panel.canCreateDirectories = true;panel.isExtensionHidden = false
-        panel.directoryURL = AppSettings.shared.directory
-        let format = ExportAccessory(format:AppSettings.shared.jpegByDefault ? .jpeg : .png,quality:AppSettings.shared.quality)
+        panel.directoryURL = preferences.directory
+        let format = ExportAccessory(format:preferences.jpegByDefault ? .jpeg : .png,quality:preferences.quality)
         panel.accessoryView = format
         defer { format.onFormatChange = nil;panel.accessoryView = nil }
         func updateType() {
@@ -455,7 +486,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             panel.nameFieldStringValue = name + (format.format == .png ? ".png" : ".jpg")
         }
         let formatter = DateFormatter();formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        let safeName = AppSettings.shared.filename.replacingOccurrences(of:"/",with:"-").replacingOccurrences(of:":",with:"-")
+        let safeName = preferences.filename.replacingOccurrences(of:"/",with:"-").replacingOccurrences(of:":",with:"-")
         panel.nameFieldStringValue = "\(safeName.isEmpty ? "Screenshot" : safeName) \(formatter.string(from:Date()))"
         updateType();format.onFormatChange = updateType
         guard panel.runModal() == .OK,let url = panel.url else { setStatus("Save cancelled");return }
@@ -464,8 +495,9 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             if original { image = source } else { image = try renderedImage() }
             let data = try ImageExporter.data(image:image,format:format.format,quality:format.quality)
             try data.write(to:url,options:.atomic)
-            AppSettings.shared.directory = url.deletingLastPathComponent();AppSettings.shared.jpegByDefault = format.format == .jpeg;AppSettings.shared.quality = format.quality
-            persistHistory();playSound();setStatus("Saved \(url.lastPathComponent)")
+            preferences.directory = url.deletingLastPathComponent();preferences.jpegByDefault = format.format == .jpeg;preferences.quality = format.quality
+            let historyOK = persistHistory();playSound()
+            setStatus(historyOK ? "Saved \(url.lastPathComponent)" : "Saved file. History not saved: \(historyFailure ?? "Choose another folder in Settings.")",error:!historyOK)
         } catch { showError(error) }
     }
     func shareScreenshot(_ sender:NSView) {
@@ -475,12 +507,14 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             sharePicker = picker;picker.show(relativeTo:sender.bounds,of:sender,preferredEdge:.maxY)
         } catch { showError(error) }
     }
-    func persistHistory() {
-        guard AppSettings.shared.historyEnabled else { return }
+    @discardableResult func persistHistory() -> Bool {
+        historyFailure = nil
+        guard preferences.historyEnabled else { return true }
         do {
             if let entry = historyEntry { try historyStore.update(entry,state:canvas.state) }
             else { historyEntry = try historyStore.save(image:source,state:canvas.state) }
-        } catch { setStatus("History could not be saved: \(error.localizedDescription)",error:true) }
+            return true
+        } catch { historyFailure = error.localizedDescription;setStatus("History could not be saved: \(error.localizedDescription)",error:true);return false }
     }
     func recognizeText() {
         do {
@@ -507,7 +541,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         scroll.documentView = view;panel.contentView = scroll
         infoWindow?.close();infoWindow = panel;panel.center();panel.makeKeyAndOrderFront(nil)
     }
-    private func playSound() { if AppSettings.shared.sound { NSSound(named:"Pop")?.play() } }
+    private func playSound() { if preferences.sound { NSSound(named:"Pop")?.play() } }
     private func setStatus(_ text:String,error:Bool = false) { statusLabel.stringValue = text;statusLabel.textColor = error ? .systemRed : .secondaryLabelColor;statusLabel.toolTip = text }
     private func showError(_ error:Error) {
         setStatus(error.localizedDescription,error:true)
@@ -543,6 +577,12 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
 }
 
 final class FlippedView: NSView { override var isFlipped: Bool { true } }
+
+final class GestureSlider:NSSlider {
+    var onBegin:(()->Void)?
+    var onEnd:(()->Void)?
+    override func mouseDown(with event:NSEvent) { onBegin?();defer{onEnd?()};super.mouseDown(with:event) }
+}
 
 final class ExportAccessory: NSView {
     let picker = NSPopUpButton()
