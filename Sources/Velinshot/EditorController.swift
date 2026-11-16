@@ -267,7 +267,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         ratioPicker.addItems(withTitles:Self.ratios.map{$0.0}+["Custom ratio or size…"]+Self.sizes.map{$0.0});ratioPicker.target = self;ratioPicker.action = #selector(ratioChanged);ratioPicker.setAccessibilityLabel("Canvas aspect ratio");add(ratioPicker,to:output)
         scalePicker.addItems(withTitles:["1×  Original pixels","2×  Double pixels","½×  Smaller image","Set output width…"]);scalePicker.target = self;scalePicker.action = #selector(scaleChanged);scalePicker.setAccessibilityLabel("Output scale");add(scalePicker,to:output)
         add(separator(),to:output);add(Brand.label("WATERMARK",size:10,weight:.semibold),to:output)
-        watermarkField.placeholderString = "Optional text";watermarkField.delegate = self;watermarkField.isBezeled = false;watermarkField.drawsBackground = true;watermarkField.backgroundColor = .textBackgroundColor;watermarkField.wantsLayer = true;watermarkField.layer?.cornerRadius = 6;watermarkField.layer?.masksToBounds = true;watermarkField.setAccessibilityLabel("Optional watermark text");add(watermarkField,to:output)
+        watermarkField.placeholderString = "Optional text";watermarkField.delegate = self;watermarkField.isBezeled = false;watermarkField.drawsBackground = true;watermarkField.backgroundColor = StudioPalette.field;watermarkField.wantsLayer = true;watermarkField.layer?.cornerRadius = 6;watermarkField.layer?.masksToBounds = true;watermarkField.heightAnchor.constraint(equalToConstant:28).isActive = true;watermarkField.setAccessibilityLabel("Optional watermark text");add(watermarkField,to:output)
         watermarkPosition.addItems(withTitles:["Top left","Top right","Bottom left","Bottom right"]);watermarkPosition.target = self;watermarkPosition.action = #selector(watermarkPositionChanged);watermarkPosition.setAccessibilityLabel("Watermark position");add(watermarkPosition,to:output)
         watermarkColor.target = self;watermarkColor.action = #selector(watermarkColorChanged);watermarkColor.setAccessibilityLabel("Watermark color");add(colorRow("Text color",well:watermarkColor),to:output)
         add(separator(),to:output);add(Brand.label("SAVED STYLES",size:10,weight:.semibold),to:output)
@@ -699,10 +699,10 @@ final class GestureSlider:NSSlider {
 }
 
 final class ExportAccessory: NSView {
-    let picker = NSPopUpButton()
+    let picker:NSSegmentedControl
     let qualitySlider = NSSlider(value:0.92,minValue:0.1,maxValue:1,target:nil,action:nil)
     var onFormatChange: (() -> Void)?
-    var format: ImageFormat { picker.indexOfSelectedItem == 0 ? .png : .jpeg }
+    var format: ImageFormat { picker.selectedSegment == 1 ? .jpeg : .png }
     var quality: Double { qualitySlider.doubleValue }
     static func encoding(for destination:URL,selected:ImageFormat) -> ImageFormat {
         switch destination.pathExtension.lowercased() {
@@ -712,9 +712,9 @@ final class ExportAccessory: NSView {
         }
     }
     init(format:ImageFormat,quality:Double) {
+        picker = NSSegmentedControl(labels:["PNG · Lossless","JPEG · Smaller"],trackingMode:.selectOne,target:nil,action:nil)
         super.init(frame:CGRect(x:0,y:0,width:340,height:64))
-        picker.addItems(withTitles:["PNG · Lossless, supports transparency","JPEG · Smaller file, white transparency"])
-        picker.selectItem(at:format == .png ? 0 : 1);picker.target = self;picker.action = #selector(changed)
+        picker.selectedSegment = format == .png ? 0 : 1;picker.segmentDistribution = .fillEqually;picker.target = self;picker.action = #selector(changed);picker.setAccessibilityLabel("Export format")
         qualitySlider.doubleValue = quality;qualitySlider.setAccessibilityLabel("JPEG quality")
         qualitySlider.isEnabled = format == .jpeg
         let stack = NSStackView(views:[picker,NSStackView(views:[Brand.label("JPEG quality"),qualitySlider])]);stack.orientation = .vertical;stack.spacing = 8

@@ -87,6 +87,14 @@ enum PlatformChecks {
         try check(ExportAccessory.encoding(for:acceptedPNG,selected:.jpeg) == .png,"accepted PNG extension wins a late JPEG picker callback")
         let matchedJPEG = try ImageExporter.data(image:source,format:ExportAccessory.encoding(for:acceptedJPEG,selected:.png))
         try check(matchedJPEG.starts(with:[0xff,0xd8]),"rapid format switching cannot write PNG bytes under a JPEG extension")
+        let formats = ExportAccessory(format:.png,quality:0.82)
+        var chosen:ImageFormat?
+        formats.onFormatChange = { chosen = formats.format }
+        formats.picker.selectedSegment = 1;_ = formats.picker.sendAction(formats.picker.action,to:formats.picker.target)
+        try check(chosen == .jpeg && formats.qualitySlider.isEnabled,"one-click JPEG choice updates encoding and enables quality")
+        formats.picker.selectedSegment = 0;_ = formats.picker.sendAction(formats.picker.action,to:formats.picker.target)
+        try check(chosen == .png && !formats.qualitySlider.isEnabled,"one-click PNG choice restores lossless encoding and disables JPEG quality")
+        formats.onFormatChange = nil
         let promise = ScreenshotPromise(data:png)
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
@@ -127,6 +135,11 @@ enum PlatformChecks {
             return view.subviews.compactMap{findSlider($0)}.first
         }
         editor.showInspectorSection(0)
+        func findReset(_ view:NSView) -> NSButton? {
+            if let button = view as? NSButton,button.title == "Reset crop" { return button }
+            return view.subviews.compactMap{findReset($0)}.first
+        }
+        try check(editorWindow.contentView.flatMap{findReset($0)}?.accessibilityLabel() == "Reset crop","an action exposes its visible name instead of the SF Symbol's generic undo label")
         guard let slider = editorWindow.contentView.flatMap({findSlider($0)}) else { throw VelinshotError.invalidImage("Padding slider was not built.") }
         let analysisState = editor.state
         try check(editor.canInstallAnalysis(for:analysisState),"automatic analysis may install only in an idle matching document")

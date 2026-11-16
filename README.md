@@ -37,6 +37,12 @@ Drag an area, press Space to capture a window, or capture a whole display. The s
 
 Local OCR lets you select and copy the words in your image. Automatic PII detection is intentionally excluded. Manual redaction stays available.
 
+| Backdrop | Output |
+|---|---|
+| ![Backdrop controls in the native editor](brand/editor-backdrop.png) | ![Output controls in the native editor](brand/editor-output.png) |
+
+<sub>Real native views, shown with the same synthetic screenshot.</sub>
+
 ## Make it yours
 
 Requires macOS 14 or later. The packaged build targets Apple Silicon; the source can be built on a compatible Mac with Apple's Swift toolchain.
