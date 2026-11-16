@@ -9,6 +9,7 @@ final class SettingsController: NSWindowController,NSTextFieldDelegate {
     private var copyRecorder: ShortcutRecorder!
     private var loginButton: NSButton!
     var onClose: (() -> Void)?
+    var onRefresh: (() -> Void)?
     init(shortcuts:GlobalShortcuts) {
         self.shortcuts = shortcuts
         let window = NSWindow(contentRect:CGRect(x:0,y:0,width:520,height:660),styleMask:[.titled,.closable],backing:.buffered,defer:false)
@@ -27,6 +28,7 @@ final class SettingsController: NSWindowController,NSTextFieldDelegate {
         captureRecorder?.shortcut = AppSettings.shared.captureShortcut;copyRecorder?.shortcut = AppSettings.shared.quickCopyShortcut
         permissionLabel.stringValue = CGPreflightScreenCaptureAccess() ? "Screen capture access is enabled." : "Screen capture access is required before capturing. Image editing works without it."
         loginButton?.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        onRefresh?()
     }
     private func build() {
         guard let root = window?.contentView else { return }

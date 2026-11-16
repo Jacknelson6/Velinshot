@@ -15,7 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var editors:[EditorController] = []
     private var statusItem:NSStatusItem?
     private var welcome:NSWindowController?
-    private lazy var settings = SettingsController(shortcuts:shortcuts)
+    private lazy var settings:SettingsController = {
+        let controller = SettingsController(shortcuts:shortcuts)
+        controller.onRefresh = { [weak self] in self?.refreshWelcomeShortcuts() }
+        return controller
+    }()
     private lazy var history:HistoryController = {
         let controller = HistoryController()
         controller.onOpen = { [weak self] image,state,entry in self?.present(image,state:state,historyEntry:entry) }
@@ -44,8 +48,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let workspace = NSWorkspace.shared.notificationCenter
         for event in [NSWorkspace.didLaunchApplicationNotification,NSWorkspace.didTerminateApplicationNotification] {
             workspaceObservers.append(workspace.addObserver(forName:event,object:nil,queue:.main) { [weak self] notification in
-                guard (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier == "com.devuap.beautyshotapp" else { return }
-                self?.shortcuts.refresh();self?.settings.refresh();self?.refreshWelcomeShortcuts()
+                let identifier = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+                guard identifier == nil || identifier == "com.devuap.beautyshotapp" else { return }
+                DispatchQueue.main.async { [weak self] in
+                    self?.shortcuts.refresh();self?.settings.refresh();self?.refreshWelcomeShortcuts()
+                }
             })
         }
         closeObserver = NotificationCenter.default.addObserver(forName:NSWindow.willCloseNotification,object:nil,queue:.main) { [weak self] _ in DispatchQueue.main.async { self?.updateDockPolicy() } }
@@ -107,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         menu.addItem(item);return item
     }
     private func showWelcome() {
+        refreshWelcomeShortcuts()
         if let welcome { NSApp.setActivationPolicy(.regular);welcome.showWindow(nil);welcome.window?.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true);return }
         let window = NSWindow(contentRect:CGRect(x:0,y:0,width:560,height:430),styleMask:[.titled,.closable,.miniaturizable],backing:.buffered,defer:false)
         window.title = "Velinshot";window.isReleasedWhenClosed = false
