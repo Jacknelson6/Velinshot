@@ -155,9 +155,6 @@ public enum CanvasRenderer {
             guard let cropped = source.cropping(to: layout.cropRect) else { throw VelinshotError.invalidCrop }
             drawImage(cropped, in: layout.imageRect, context: context)
         }
-        context.translateBy(x: layout.imageRect.minX - layout.cropRect.minX,
-                            y: layout.imageRect.minY - layout.cropRect.minY)
-        try drawAnnotations(state.annotations, source: source, proxySourceSize: isProxy ? sourceSize : nil, context: context)
         context.restoreGState()
         if state.style.borderWidth > 0 {
             context.saveGState()
@@ -167,6 +164,13 @@ public enum CanvasRenderer {
             context.strokePath()
             context.restoreGState()
         }
+        context.saveGState()
+        context.clip(to: canvasRect)
+        context.translateBy(x: layout.sourceOriginInCanvas.x, y: layout.sourceOriginInCanvas.y)
+        let blurClip = CGPath(roundedRect:layout.cropRect,cornerWidth:innerRadius,cornerHeight:innerRadius,transform:nil)
+        try drawAnnotations(state.annotations, source: source, proxySourceSize: isProxy ? sourceSize : nil,
+                            blurClip:blurClip, context: context)
+        context.restoreGState()
         context.saveGState()
         // Watermark dimensions and 12px margins use final export pixels. The
         // preview applies the same geometry at its reduced raster scale.
@@ -289,7 +293,7 @@ public enum CanvasRenderer {
         context.restoreGState()
     }
 
-    private static func drawAnnotations(_ annotations: [Annotation], source: CGImage, proxySourceSize: CGSize?, context: CGContext) throws {
+    private static func drawAnnotations(_ annotations: [Annotation], source: CGImage, proxySourceSize: CGSize?, blurClip:CGPath, context: CGContext) throws {
         guard annotations.count <= 10_000, annotations.reduce(0, { $0 + $1.points.count }) <= 1_000_000 else {
             throw VelinshotError.invalidStyle("There are too many annotations.")
         }
@@ -362,6 +366,7 @@ public enum CanvasRenderer {
                 context.setFillColor(opaque.cgColor)
                 context.fill(rect.integral)
             case .blur:
+                context.addPath(blurClip);context.clip()
                 if let proxySourceSize {
                     drawProxyBlur(source: source, sourceSize: proxySourceSize, rect: rect.integral,
                                   strength: max(8, width * 2), context: context)

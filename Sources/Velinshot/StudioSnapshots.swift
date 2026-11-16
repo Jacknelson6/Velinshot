@@ -10,7 +10,10 @@ enum StudioSnapshots {
         guard let defaults = UserDefaults(suiteName:domain) else { throw VelinshotError.renderingFailed }
         defer { defaults.removePersistentDomain(forName:domain) }
         let preferences = AppSettings(defaults:defaults)
-        let source = try DemoFixture.make(),final = DemoFixture.style()
+        let source = try DemoFixture.make()
+        var final = DemoFixture.style()
+        final.style.autoInsetColor = true
+        final.style.insetColor = AutoBeautify.suggestInsetColor(source:source,crop:final.crop)
         let proxy = try ImageLoader.preview(image:source)
         let framed = EditState(style:final.style)
         let sourceData = try ImageExporter.data(image:source,format:.png)
@@ -39,11 +42,17 @@ enum StudioSnapshots {
                     try write(view:view,to:directory.appendingPathComponent(name+"-output.png"))
                     editor.showInspectorSection(0);editor.setTool(.arrow);root.layoutSubtreeIfNeeded()
                     try write(view:view,to:directory.appendingPathComponent(name+"-markup.png"))
+                    var margin = final;margin.style.inset = 12
+                    margin.annotations.append(Annotation(kind:.arrow,points:[CGPoint(x:-40,y:CGFloat(source.height)*0.7),CGPoint(x:CGFloat(source.width)*0.25,y:-40)],color:RGBA(hex:"F05A6E"),lineWidth:8))
+                    editor.canvas.state = margin
+                    try editor.canvas.prepareDocumentationSnapshot();root.layoutSubtreeIfNeeded()
+                    try write(view:view,to:directory.appendingPathComponent(name+"-margin.png"))
+                    try ImageExporter.data(image:CanvasRenderer.render(source:source,state:margin),format:.png).write(to:directory.appendingPathComponent(name+"-margin-export.png"),options:.atomic)
                 }
                 editor.close()
             }
         }
-        let provenance:[String:Any] = ["description":"Native UI rendered from the real app with a synthetic fixture. These are view exports, not live screen recordings.","drawingSymbolPoints":19,"toolbarSymbolPoints":17,"drawingTargetPoints":[38,32],"panelBorders":false,"layouts":records]
+        let provenance:[String:Any] = ["description":"Native UI rendered from the real app with a synthetic fixture. These are view exports, not live screen recordings.","drawingSymbolPoints":20,"toolbarSymbolPoints":17,"drawingTargetPoints":[38,32],"footerActionHeightPoints":36,"panelBorders":false,"layouts":records]
         try JSONSerialization.data(withJSONObject:provenance,options:[.prettyPrinted,.sortedKeys]).write(to:directory.appendingPathComponent("provenance.json"),options:.atomic)
         print("Native studio views exported to \(directory.path)")
     }

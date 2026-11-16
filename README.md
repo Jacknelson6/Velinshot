@@ -6,9 +6,9 @@
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-7160E8?style=flat-square"></a>
     <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-191A25?style=flat-square">
     <img alt="Swift and AppKit" src="https://img.shields.io/badge/built_with-Swift_%26_AppKit-F05138?style=flat-square">
-    <a href="https://github.com/Jacknelson6/Velinshot/actions/runs/43818101131"><img alt="90 XCTest cases passed" src="https://img.shields.io/badge/tests-90_XCTest_passed-7160E8?style=flat-square"></a>
+    <a href="docs/QA.md"><img alt="Local checks: 115 core scenarios and 135 native checks" src="https://img.shields.io/badge/local_checks-115_core_%2B_135_native-7160E8?style=flat-square"></a>
   </p>
-  <p><a href="https://github.com/Jacknelson6/Velinshot/tree/feature/native-macos">Source</a> · <a href="#make-it-yours">Build the preview</a> · <a href="docs/FEATURES.md">Features</a></p>
+  <p><a href="Sources">Source</a> · <a href="#make-it-yours">Build the preview</a> · <a href="docs/FEATURES.md">Features</a></p>
 </div>
 
 <picture>
@@ -18,7 +18,7 @@
 
 <sub>Native UI rendered from the real app with a synthetic fixture.</sub>
 
-**Preview build.** Native editing and PNG/JPEG saves are implemented and tested. Live area/window/display capture verification is waiting on macOS Screen Recording approval, Finder receipt of a promised file is unconfirmed, and no app release has been published yet. [Source and review](https://github.com/Jacknelson6/Velinshot/pull/1) · [Current validation](VALIDATION.md).
+**Preview build.** Capture has been confirmed on the owner's Mac. Local checks cover native editing, full-canvas markup, automatic inset color and PNG/JPEG saves. Mode-by-mode capture, Finder delivery and Share destination checks remain open. [Current validation](VALIDATION.md).
 
 Free, native screenshot editing for macOS. No account, subscription, watermark requirement or browser runtime. Built from scratch with Swift and the frameworks already on your Mac.
 
@@ -49,7 +49,7 @@ Local OCR lets you select and copy the words in your image. Automatic PII detect
 Requires macOS 14 or later. The packaged build targets Apple Silicon; the source can be built on a compatible Mac with Apple's Swift toolchain.
 
 ```sh
-git clone --branch feature/native-macos https://github.com/Jacknelson6/Velinshot.git
+git clone https://github.com/Jacknelson6/Velinshot.git
 cd Velinshot
 bash scripts/build-app.sh
 open build/Velinshot.app
@@ -74,11 +74,14 @@ On first capture, allow **Velinshot** in **System Settings → Privacy & Securit
 | T · H · B · K | Text · Highlight · Blur · Redact |
 | N · X · L · V | Number · Crop · Line · Select |
 | Delete | Remove a selected mark |
+| Tab / Shift-Tab in Select | Cycle marks, including marks outside the canvas |
 | ⌘0 · ⌘+ · ⌘− | Fit · Zoom in · Zoom out |
 | ⌘1 · ⌘2 · ⌘3 | Frame · Backdrop · Output inspector |
 | ⇧⌘T | Reopen the last closed screenshot |
 
-Shift constrains boxes to squares, ellipses to circles, and arrows/lines to 45-degree directions. Double-click a text mark to edit it, or double-click the background to copy and close. Letter shortcuts yield while you are typing.
+Draw and place text anywhere in the framed canvas, including the mat around the screenshot. Crop and blur stay within the image. Shift constrains boxes to squares, ellipses to circles, and arrows/lines to 45-degree directions. In Select, double-click a text mark to edit it or empty background to copy and close. Tab cycles through marks; Escape or tabbing past the last mark releases canvas focus. Letter shortcuts yield while you are typing.
+
+Inset fill follows the visible image's dominant edge color by default. The Auto control restores matching after a manual choice; choosing a fill color turns Auto off. Saved older history and presets retain their recorded colors.
 
 ## Small by design
 

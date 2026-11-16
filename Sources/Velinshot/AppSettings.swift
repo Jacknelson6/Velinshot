@@ -72,6 +72,10 @@ final class AppSettings {
         }
     }
     var quality: Double { get { defaults.object(forKey: "quality") == nil ? 0.92 : defaults.double(forKey: "quality") } set { set(min(1, max(0.1, newValue)), "quality") } }
+    var autoInsetFill:Bool {
+        get { bool("autoInsetFill.v1",default:true) }
+        set { defaults.set(newValue,forKey:"autoInsetFill.v1") }
+    }
     private func shortcut(_ key: String, fallback: AppShortcut) -> AppShortcut {
         guard let data = defaults.data(forKey: key), let result = try? JSONDecoder().decode(AppShortcut.self, from: data) else { return fallback }
         return result
@@ -86,10 +90,11 @@ final class AppSettings {
     }
     var style: CanvasStyle {
         get {
-            guard let data = defaults.data(forKey: "canvasStyle"), let style = try? JSONDecoder().decode(CanvasStyle.self, from: data) else { return CanvasStyle() }
+            guard let data = defaults.data(forKey: "canvasStyle"), var style = try? JSONDecoder().decode(CanvasStyle.self, from: data) else { return CanvasStyle(autoInsetColor:autoInsetFill) }
+            style.autoInsetColor = autoInsetFill
             return style
         }
-        set { defaults.set(try? JSONEncoder().encode(newValue), forKey: "canvasStyle") }
+        set { defaults.set(try? JSONEncoder().encode(newValue), forKey: "canvasStyle");autoInsetFill = newValue.autoInsetColor }
     }
     static var supportDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Velinshot", isDirectory: true)

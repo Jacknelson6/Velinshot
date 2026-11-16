@@ -203,6 +203,8 @@ enum PlatformChecks {
         preferences.historyEnabled = false;preferences.historyDirectory = firstHistory
         editor.close()
         count += try ImageWorkChecks.run()
+        count += try CanvasMarginChecks.run(directory:directory)
+        count += try InsetAutomaticChecks.run(directory:directory)
         print("\(count) platform integration checks passed in isolated settings and hidden native views.")
         return count
     }

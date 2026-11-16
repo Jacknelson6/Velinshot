@@ -109,6 +109,7 @@ public struct CanvasStyle: Codable, Equatable, Sendable {
     public var backgroundAssetID: String?
     public var inset: Double
     public var insetColor: RGBA
+    public var autoInsetColor: Bool
     public var fixedWidth: Int?
     public var fixedHeight: Int?
     public var autoBalance: Bool
@@ -125,7 +126,7 @@ public struct CanvasStyle: Codable, Equatable, Sendable {
                 outputScale: Double = 1, borderWidth: Double = 0, backgroundAssetID: String? = nil,
                 inset: Double = 0, insetColor: RGBA = RGBA(hex: "FFFFFF"),
                 fixedWidth: Int? = nil, fixedHeight: Int? = nil,
-                autoBalance: Bool = true, autoColor: Bool = false,
+                autoBalance: Bool = true, autoColor: Bool = false, autoInsetColor: Bool = false,
                 watermarkText: String = "", watermarkFontSize: Double = 20,
                 watermarkColor: RGBA = RGBA(red: 24.0 / 255, green: 26.0 / 255, blue: 36.0 / 255, alpha: 0.7),
                 watermarkPosition: WatermarkPosition = .bottomRight) {
@@ -143,6 +144,7 @@ public struct CanvasStyle: Codable, Equatable, Sendable {
         self.backgroundAssetID = backgroundAssetID
         self.inset = inset
         self.insetColor = insetColor
+        self.autoInsetColor = autoInsetColor
         self.fixedWidth = fixedWidth
         self.fixedHeight = fixedHeight
         self.autoBalance = autoBalance
@@ -156,7 +158,7 @@ public struct CanvasStyle: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case padding, cornerRadius, shadow, background, color1, color2, gradientAngle
         case ratioWidth, ratioHeight, outputScale, borderWidth, backgroundAssetID
-        case inset, insetColor, fixedWidth, fixedHeight, autoBalance, autoColor
+        case inset, insetColor, fixedWidth, fixedHeight, autoBalance, autoColor, autoInsetColor
         case watermarkText, watermarkFontSize, watermarkColor, watermarkPosition
     }
 
@@ -177,6 +179,7 @@ public struct CanvasStyle: Codable, Equatable, Sendable {
         backgroundAssetID = try values.decodeIfPresent(String.self, forKey: .backgroundAssetID)
         inset = try values.decodeIfPresent(Double.self, forKey: .inset) ?? defaults.inset
         insetColor = try values.decodeIfPresent(RGBA.self, forKey: .insetColor) ?? defaults.insetColor
+        autoInsetColor = try values.decodeIfPresent(Bool.self, forKey: .autoInsetColor) ?? false
         fixedWidth = try values.decodeIfPresent(Int.self, forKey: .fixedWidth)
         fixedHeight = try values.decodeIfPresent(Int.self, forKey: .fixedHeight)
         autoBalance = try values.decodeIfPresent(Bool.self, forKey: .autoBalance) ?? defaults.autoBalance
@@ -206,6 +209,23 @@ public struct RenderLayout: Equatable, Sendable {
     public let cropRect: CGRect
     public let exportSize: CGSize
     public let panelRect: CGRect
+
+    public var sourceOriginInCanvas: CGPoint {
+        CGPoint(x: imageRect.minX - cropRect.minX, y: imageRect.minY - cropRect.minY)
+    }
+
+    public var canvasBoundsInSource: CGRect {
+        CGRect(x: -sourceOriginInCanvas.x, y: -sourceOriginInCanvas.y,
+               width: canvasSize.width, height: canvasSize.height)
+    }
+
+    public func compositionPoint(forSource point: CGPoint) -> CGPoint {
+        CGPoint(x: point.x + sourceOriginInCanvas.x, y: point.y + sourceOriginInCanvas.y)
+    }
+
+    public func sourcePoint(forComposition point: CGPoint) -> CGPoint {
+        CGPoint(x: point.x - sourceOriginInCanvas.x, y: point.y - sourceOriginInCanvas.y)
+    }
 
     public init(canvasSize: CGSize, imageRect: CGRect, cropRect: CGRect, exportSize: CGSize, panelRect: CGRect? = nil) {
         self.canvasSize = canvasSize

@@ -54,6 +54,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private var annotationColorWell = StudioColorWell()
     private var balanceCheck:NSButton!
     private var autoColorCheck:NSButton!
+    private var autoInsetCheck:NSButton!
     private var watermarkField = NSTextField()
     private var watermarkPosition = NSPopUpButton()
     private var watermarkColor = StudioColorWell()
@@ -74,6 +75,9 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private var historyFailure:String?
     private var analysis:DocumentAnalysis
     private let analysisWork = LatestImageWork<DocumentAnalysis>()
+    private var insetRefreshPending = false
+    private var insetRefreshScheduled = false
+    private var insetJobCrop:KnownContentBounds?
     private let backgroundWork = LatestImageWork<(CGImage,String)>()
     private var loadedBackgroundID:String?
     private var pendingBackgroundID:String?
@@ -83,7 +87,9 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         self.analysis = preparedAnalysis
         self.presetStore = PresetStore(fileURL:supportDirectory.appendingPathComponent("presets.json"))
         self.source = source
-        let initial = state ?? NewDocument.state(source:source,style:preferences.style)
+        let initial:EditState
+        if let state { initial = state }
+        else { let prepared = NewDocument.prepare(source:source,style:preferences.style);initial = prepared.state;self.analysis = prepared.analysis }
         canvas = CanvasView(source:source,state:initial,preparedPreview:preparedPreview)
         let visible = NSScreen.main?.visibleFrame ?? CGRect(x:0,y:0,width:1200,height:800)
         let size = CGSize(width:min(950,visible.width-32),height:min(650,visible.height-32))
@@ -106,7 +112,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         canvas.onImportData = { [weak self] in self?.onImportData?($0) }
         canvas.onBackgroundDoubleClick = { [weak self] in self?.copyImage(forceClose:true) }
         canvas.onKey = { [weak self] in self?.handleKey($0) ?? false }
-        canvas.onTextEditingChange = { [weak self] active in self?.textEditingActive = active;self?.fieldUndo.removeAllActions() }
+        canvas.onTextEditingChange = { [weak self] active in self?.textEditingActive = active;self?.fieldUndo.removeAllActions();if !active { self?.scheduleInsetRefresh() } }
         canvas.onSelection = { [weak self] annotation in
             guard let self else { return }
             self.updateInspectorContext(annotation)
@@ -198,8 +204,8 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         let drag = DragExportButton();drag.imageProvider = { [weak self] in
             guard let self else { throw VelinshotError.renderingFailed };return try self.renderedImage()
         };drag.onError = { [weak self] in self?.showError($0) };drag.controlSize = .small
-        let share = StudioButton(symbol:"square.and.arrow.up") {}
-        share.actionHandler = { [weak self,weak share] in if let share { self?.shareScreenshot(share) } };share.toolTip = "Share finished screenshot";share.setAccessibilityLabel("Share screenshot");share.widthAnchor.constraint(equalToConstant:32).isActive = true
+        let share = StudioButton(symbol:"square.and.arrow.up",kind:.footer) {}
+        share.actionHandler = { [weak self,weak share] in if let share { self?.shareScreenshot(share) } };share.toolTip = "Share finished screenshot";share.setAccessibilityLabel("Share screenshot");share.widthAnchor.constraint(equalToConstant:36).isActive = true
         dimensionsLabel.font = .monospacedDigitSystemFont(ofSize:11,weight:.medium);dimensionsLabel.textColor = .labelColor
         statusLabel.textColor = .secondaryLabelColor;statusLabel.lineBreakMode = .byTruncatingTail;statusLabel.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
         let information = NSStackView(views:[dimensionsLabel,statusLabel]);information.orientation = .vertical;information.alignment = .leading;information.spacing = 3
@@ -223,11 +229,11 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         let heading = inspectorHeading
         let tabs = StudioSegments(labels:["Frame","Backdrop","Output"],trackingMode:.selectOne,target:self,action:#selector(inspectorTabChanged));tabs.selectedSegment = 0;tabs.segmentDistribution = .fillEqually;tabs.controlSize = .regular;tabs.setAccessibilityLabel("Inspector section")
         inspectorTabs = tabs
-        let top = NSStackView(views:[heading,tabs]);top.orientation = .vertical;top.alignment = .leading;top.spacing = 13
+        let top = NSStackView(views:[heading,tabs]);top.orientation = .vertical;top.alignment = .leading;top.spacing = 10
         panel.addSubview(top);top.translatesAutoresizingMaskIntoConstraints = false
         let scroll = NSScrollView();scroll.hasVerticalScroller = true;scroll.autohidesScrollers = true;scroll.drawsBackground = false;scroll.borderType = .noBorder
         panel.addSubview(scroll);scroll.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([top.leadingAnchor.constraint(equalTo:panel.leadingAnchor,constant:18),top.trailingAnchor.constraint(equalTo:panel.trailingAnchor,constant:-18),top.topAnchor.constraint(equalTo:panel.topAnchor,constant:20),tabs.widthAnchor.constraint(equalTo:top.widthAnchor),scroll.topAnchor.constraint(equalTo:top.bottomAnchor,constant:15),scroll.leadingAnchor.constraint(equalTo:panel.leadingAnchor),scroll.trailingAnchor.constraint(equalTo:panel.trailingAnchor),scroll.bottomAnchor.constraint(equalTo:panel.bottomAnchor)])
+        NSLayoutConstraint.activate([top.leadingAnchor.constraint(equalTo:panel.leadingAnchor,constant:18),top.trailingAnchor.constraint(equalTo:panel.trailingAnchor,constant:-18),top.topAnchor.constraint(equalTo:panel.topAnchor,constant:16),tabs.widthAnchor.constraint(equalTo:top.widthAnchor),scroll.topAnchor.constraint(equalTo:top.bottomAnchor,constant:12),scroll.leadingAnchor.constraint(equalTo:panel.leadingAnchor),scroll.trailingAnchor.constraint(equalTo:panel.trailingAnchor),scroll.bottomAnchor.constraint(equalTo:panel.bottomAnchor)])
         let document = FlippedView();scroll.documentView = document;document.translatesAutoresizingMaskIntoConstraints = false;document.widthAnchor.constraint(equalTo:scroll.contentView.widthAnchor).isActive = true
         let stack = NSStackView();stack.orientation = .vertical;stack.alignment = .leading;stack.spacing = 18;stack.detachesHiddenViews = true
         document.addSubview(stack);stack.translatesAutoresizingMaskIntoConstraints = false
@@ -235,11 +241,13 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         inspectorScroll = scroll
         func add(_ view:NSView,to group:NSStackView) { group.addArrangedSubview(view);view.translatesAutoresizingMaskIntoConstraints = false;view.widthAnchor.constraint(equalTo:group.widthAnchor).isActive = true }
         func group() -> NSStackView { let view = NSStackView();view.orientation = .vertical;view.alignment = .leading;view.spacing = 16;view.detachesHiddenViews = true;add(view,to:stack);return view }
-        let frame = group(),backdrop = group(),output = group();frame.spacing = 11;inspectorPages = [frame,backdrop,output];backdrop.isHidden = true;output.isHidden = true
+        let frame = group(),backdrop = group(),output = group();frame.spacing = 10;inspectorPages = [frame,backdrop,output];backdrop.isHidden = true;output.isHidden = true
         add(sliderRow("Padding",key:"padding",min:0,max:240),to:frame)
         add(sliderRow("Inset",key:"inset",min:0,max:160),to:frame)
         insetColor.target = self;insetColor.action = #selector(insetColorChanged);insetColor.setAccessibilityLabel("Inset fill color")
-        add(colorRow("Inset fill",well:insetColor),to:frame)
+        autoInsetCheck = CheckButton(title:"Auto",value:canvas.state.style.autoInsetColor) { [weak self] enabled in self?.setAutomaticInset(enabled) }
+        autoInsetCheck.font = .systemFont(ofSize:11,weight:.medium);autoInsetCheck.controlSize = .small;autoInsetCheck.setAccessibilityLabel("Automatic inset fill")
+        add(colorRow("Inset fill",well:insetColor,mode:autoInsetCheck),to:frame)
         add(sliderRow("Corners",key:"cornerRadius",min:0,max:100),to:frame)
         add(sliderRow("Shadow",key:"shadow",min:0,max:100),to:frame)
         add(sliderRow("Border",key:"borderWidth",min:0,max:12),to:frame)
@@ -289,10 +297,11 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         markupSection = annotation;annotation.isHidden = true
         return panel
     }
-    private func colorRow(_ title:String,well:NSColorWell) -> NSView {
+    private func colorRow(_ title:String,well:NSColorWell,mode:NSButton? = nil) -> NSView {
         well.controlSize = .small;well.colorWellStyle = .minimal
-        well.widthAnchor.constraint(equalToConstant:92).isActive = true;well.heightAnchor.constraint(equalToConstant:26).isActive = true
-        let row = NSStackView(views:[Brand.label(title),NSView(),well]);row.alignment = .centerY;return row
+        well.widthAnchor.constraint(equalToConstant:100).isActive = true;well.heightAnchor.constraint(equalToConstant:30).isActive = true
+        let row = NSStackView(views:[Brand.label(title),NSView()]);if let mode { row.addArrangedSubview(mode) };row.addArrangedSubview(well)
+        row.spacing = mode == nil ? 8 : 4;row.alignment = .centerY;return row
     }
     @objc private func inspectorTabChanged(_ tabs:NSSegmentedControl) {
         window?.makeFirstResponder(canvas)
@@ -350,13 +359,18 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         guard before != after else { return }
         editorUndo.registerUndo(withTarget:self) { target in target.restore(before) }
         editorUndo.setActionName("Edit screenshot")
-        preferences.style = after.style
+        storeStyle(after.style,previous:before.style)
         syncInspector()
+        updateInsetRequest(before:before,after:after)
     }
     private func restore(_ state:EditState) {
+        cancelAnalysis()
         let previous = canvas.state
+        var restored = state
+        if restored.style.autoInsetColor,analysis.insetCrop == restored.crop,let color = analysis.insetColor { restored.style.insetColor = color }
         editorUndo.registerUndo(withTarget:self) { target in target.restore(previous) }
-        canvas.state = state;preferences.style = state.style;canvas.clearSelection();loadBackground();syncInspector()
+        canvas.state = restored;storeStyle(restored.style,previous:previous.style);canvas.clearSelection();loadBackground();syncInspector()
+        updateInsetRequest(before:previous,after:restored)
     }
     private func change(_ mutation:(inout EditState)->Void) {
         canvas.finishText();canvas.finishPointerGesture()
@@ -365,6 +379,15 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         catch { setStatus(error.localizedDescription,error:true);return }
         canvas.state = after
         if inspectorGestureBefore == nil && watermarkGestureBefore == nil { commit(before:before,after:after) } else { syncInspector() }
+    }
+    private func storeStyle(_ style:CanvasStyle,previous:CanvasStyle) {
+        let automatic = preferences.autoInsetFill
+        var stored = style
+        if !automatic,style.autoInsetColor,style.autoInsetColor == previous.autoInsetColor {
+            stored.insetColor = preferences.style.insetColor
+        }
+        preferences.style = stored
+        if style.autoInsetColor == previous.autoInsetColor { preferences.autoInsetFill = automatic }
     }
     func undoEdit() { canvas.finishText();if !canvas.cancelPointerGesture() { editorUndo.undo() };syncInspector() }
     func redoEdit() { canvas.finishText();if !canvas.cancelPointerGesture() { editorUndo.redo() };syncInspector() }
@@ -376,6 +399,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         backgroundPicker.selectItem(at:[BackgroundKind.gradient,.solid,.image,.transparent].firstIndex(of:style.background) ?? 0)
         firstColor.color = style.color1.nsColor;secondColor.color = style.color2.nsColor
         insetColor.color = style.insetColor.nsColor;balanceCheck?.state = style.autoBalance ? .on : .off;autoColorCheck?.state = style.autoColor ? .on : .off
+        autoInsetCheck?.state = style.autoInsetColor ? .on : .off
         if let width = style.fixedWidth,let height = style.fixedHeight {
             ratioPicker.selectItem(at:Self.sizes.firstIndex(where:{$0.1 == width && $0.2 == height}).map{Self.ratios.count+1+$0} ?? Self.ratios.count)
             scalePicker.selectItem(at:3)
@@ -406,7 +430,10 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     }
     @objc private func backgroundChanged(_ sender:NSPopUpButton) { let types:[BackgroundKind] = [.gradient,.solid,.image,.transparent];change{$0.style.background = types[sender.indexOfSelectedItem];$0.style.autoColor = false};if sender.indexOfSelectedItem == 2, canvas.backgroundImage == nil { chooseBackground() } }
     @objc private func colorsChanged(_ sender:NSColorWell) { change{$0.style.color1 = RGBA(firstColor.color);$0.style.color2 = RGBA(secondColor.color);$0.style.autoColor = false} }
-    @objc private func insetColorChanged(_ sender:NSColorWell) { change{$0.style.insetColor = RGBA(sender.color)} }
+    @objc private func insetColorChanged(_ sender:NSColorWell) {
+        cancelAnalysis();insetRefreshPending = false;preferences.autoInsetFill = false
+        change{$0.style.insetColor = RGBA(sender.color);$0.style.autoInsetColor = false}
+    }
     @objc private func annotationColorChanged(_ sender:NSColorWell) { canvas.annotationColor = RGBA(sender.color);canvas.changeSelection(color:canvas.annotationColor) }
     @objc private func widthChanged(_ sender:NSSegmentedControl) { canvas.lineWidth = [3.0,6,12][sender.selectedSegment];canvas.changeSelection(lineWidth:canvas.lineWidth) }
     @objc private func fontChanged(_ sender:NSPopUpButton) { canvas.fontSize = [24.0,36,48,72,96][sender.indexOfSelectedItem];canvas.changeSelection(fontSize:canvas.fontSize) }
@@ -451,22 +478,74 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     }
     private func setAutomaticBalance(_ enabled:Bool) {
         if enabled { requestAnalysis(balance:true,colors:false) }
-        else { analysisWork.cancel();change{$0.style.autoBalance = false;$0.crop = nil};canvas.fit() }
+        else { cancelAnalysis();change{$0.style.autoBalance = false;$0.crop = nil};canvas.fit() }
     }
     private func setAutomaticColors(_ enabled:Bool) {
         if enabled { requestAnalysis(balance:false,colors:true) }
-        else { analysisWork.cancel();change{$0.style.autoColor = false} }
+        else { cancelAnalysis();change{$0.style.autoColor = false} }
+    }
+    private func cancelAnalysis() { analysisWork.cancel();insetJobCrop = nil }
+    private func setAutomaticInset(_ enabled:Bool) {
+        cancelAnalysis();insetRefreshPending = enabled;preferences.autoInsetFill = enabled
+        change{$0.style.autoInsetColor = enabled};scheduleInsetRefresh()
+    }
+    private func updateInsetRequest(before:EditState,after:EditState) {
+        if !after.style.autoInsetColor { insetRefreshPending = false;return }
+        if before.crop != after.crop || !before.style.autoInsetColor || before.style.insetColor != after.style.insetColor { insetRefreshPending = true }
+        scheduleInsetRefresh()
+    }
+    private func scheduleInsetRefresh() {
+        guard insetRefreshPending,!insetRefreshScheduled,!userIsClosing else { return }
+        insetRefreshScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return };self.insetRefreshScheduled = false;self.refreshInsetIfReady()
+        }
+    }
+    private func refreshInsetIfReady() {
+        guard insetRefreshPending,!userIsClosing,canvas.state.style.autoInsetColor else { return }
+        guard !canvas.hasActiveGesture,inspectorGestureBefore == nil,watermarkGestureBefore == nil else { return }
+        let crop = canvas.state.crop
+        if analysis.insetCrop == crop,let color = analysis.insetColor {
+            insetRefreshPending = false
+            if canvas.state.style.insetColor != color {
+                var updated = canvas.state;updated.style.insetColor = color
+                canvas.state = updated;storeStyle(updated.style,previous:updated.style);syncInspector()
+            }
+            return
+        }
+        if let pending = insetJobCrop,pending.bounds == crop { return }
+        let source = source,cached = analysis
+        insetJobCrop = KnownContentBounds(bounds:crop)
+        analysisWork.submit(work:{ ticket in
+            try ticket.checkpoint();var value = cached
+            value.insetColor = AutoBeautify.suggestInsetColor(source:source,crop:crop);value.insetCrop = crop
+            return value
+        }) { [weak self] result in
+            guard let self,!self.userIsClosing else { return };self.insetJobCrop = nil
+            switch result {
+            case .success(let value):
+                self.analysis.insetColor = value.insetColor;self.analysis.insetCrop = value.insetCrop
+                guard self.canvas.state.style.autoInsetColor,self.canvas.state.crop == crop else { return }
+                self.insetRefreshPending = true;self.scheduleInsetRefresh()
+            case .failure(let error):self.insetRefreshPending = false;self.showError(error)
+            }
+        }
     }
     private func autoBeautify() { requestAnalysis(balance:true,colors:true) }
     private func requestAnalysis(balance:Bool,colors:Bool) {
         window?.makeFirstResponder(canvas);canvas.finishText()
         let before = canvas.state,source = source,cached = analysis
+        insetJobCrop = nil
         setStatus(balance ? "Balancing your image…" : "Matching image colors…")
         analysisWork.submit(work:{ ticket in
             var result = cached
             if balance,result.bounds == nil { result.bounds = KnownContentBounds(bounds:AutoBeautify.contentBounds(source:source)) }
             try ticket.checkpoint()
             if colors,result.colors == nil { result.colors = AutoBeautify.suggestColors(source:source) }
+            if balance,before.style.autoInsetColor {
+                let crop = result.bounds?.bounds
+                if result.insetColor == nil || result.insetCrop != crop { result.insetColor = AutoBeautify.suggestInsetColor(source:source,crop:crop);result.insetCrop = crop }
+            }
             return result
         }) { [weak self] result in
             guard let self,!self.userIsClosing else { return }
@@ -477,6 +556,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
                 self.change {
                     if balance { $0.crop = value.bounds?.bounds;$0.style.autoBalance = true }
                     if colors,let pair = value.colors { $0.style.color1 = pair.0;$0.style.color2 = pair.1;$0.style.background = .gradient;$0.style.autoColor = true }
+                    if balance,$0.style.autoInsetColor,let color = value.insetColor { $0.style.insetColor = color }
                 }
                 self.canvas.fit();self.setStatus(balance && colors ? "Balanced and matched to your image" : balance ? "Image balanced" : "Colors matched")
             case .failure(let error):self.syncInspector();self.showError(error)
@@ -545,6 +625,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     @objc private func presetChanged(_ sender:NSPopUpButton) {
         let index = sender.indexOfSelectedItem-1
         guard presets.indices.contains(index) else { return }
+        preferences.autoInsetFill = presets[index].style.autoInsetColor
         change{$0.style = presets[index].style};loadBackground();canvas.fit()
     }
     private func savePreset() {

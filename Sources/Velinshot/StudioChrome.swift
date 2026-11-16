@@ -33,7 +33,7 @@ final class StudioSurface:NSView {
 /// Uses ordinary NSButton targeting, keyboard navigation and accessibility.
 /// Hover is event-driven; there are no animations, timers or idle refreshes.
 class StudioButton:NSButton {
-    enum Kind { case quiet, secondary, primary, tool }
+    enum Kind { case quiet, secondary, primary, tool, footer }
     var kind:Kind = .quiet
     var shortcut:String?
     var imageSpacing:CGFloat = 7
@@ -45,17 +45,20 @@ class StudioButton:NSButton {
         self.init(frame:.zero)
         self.title = title;self.kind = kind;self.shortcut = shortcut;self.actionHandler = action
         if !title.isEmpty { setAccessibilityLabel(title) }
-        if let symbol { image = Brand.symbol(symbol,size:kind == .tool ? 19 : 17) }
+        if let symbol { image = Brand.symbol(symbol,size:kind == .tool ? 20 : 17) }
         font = .systemFont(ofSize:12,weight:.medium)
         isBordered = false;focusRingType = .exterior;setButtonType(.momentaryPushIn)
         target = self;self.action = #selector(invoke)
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant:kind == .primary || kind == .secondary ? 36 : 32).isActive = true
+        heightAnchor.constraint(equalToConstant:controlHeight).isActive = true
     }
+    private var controlHeight:CGFloat { kind == .primary || kind == .secondary || kind == .footer ? 36 : 32 }
+    override var alignmentRectInsets:NSEdgeInsets { NSEdgeInsets(top:0,left:0,bottom:0,right:0) }
     @objc private func invoke() { actionHandler?() }
     override var intrinsicContentSize:NSSize {
         let text = (title as NSString).size(withAttributes:[.font:font ?? NSFont.systemFont(ofSize:12)])
-        return NSSize(width:max(32,text.width+(image == nil ? 0 : (symbolSize ?? 17)+imageSpacing)+(shortcut == nil ? 0 : 27)+24),height:36)
+        let icon = symbolSize ?? (kind == .tool ? 20 : 17)
+        return NSSize(width:max(32,text.width+(image == nil ? 0 : icon+(title.isEmpty ? 0 : imageSpacing))+(shortcut == nil ? 0 : 29)+20),height:controlHeight)
     }
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -80,7 +83,7 @@ class StudioButton:NSButton {
         let alpha:CGFloat = isEnabled ? 1 : 0.35
         let textFont = NSFont.systemFont(ofSize:12,weight:kind == .primary ? .semibold : .medium)
         let textWidth = (title as NSString).size(withAttributes:[.font:textFont]).width
-        let iconBox:CGFloat = symbolSize ?? (kind == .tool ? 19 : 17)
+        let iconBox:CGFloat = symbolSize ?? (kind == .tool ? 20 : 17)
         let total = textWidth+(image == nil ? 0 : (title.isEmpty ? iconBox : iconBox+imageSpacing))+(shortcut == nil ? 0 : 29)
         var x = (bounds.width-total)/2
         if let image {
@@ -105,6 +108,8 @@ class StudioButton:NSButton {
 }
 
 final class StudioSegments:NSSegmentedControl {
+    override var alignmentRectInsets:NSEdgeInsets { NSEdgeInsets(top:0,left:0,bottom:0,right:0) }
+    override var intrinsicContentSize:NSSize { var size = super.intrinsicContentSize;size.height = 32;return size }
     override func draw(_ dirtyRect:NSRect) {
         guard segmentCount>0 else { return }
         let width = bounds.width/CGFloat(segmentCount)
@@ -125,6 +130,7 @@ final class StudioSegments:NSSegmentedControl {
 }
 
 final class StudioColorWell:NSColorWell {
+    override var alignmentRectInsets:NSEdgeInsets { NSEdgeInsets(top:0,left:0,bottom:0,right:0) }
     override func draw(_ dirtyRect:NSRect) {
         let sample = CGRect(x:6,y:bounds.midY-8,width:16,height:16)
         NSColor.secondaryLabelColor.withAlphaComponent(0.65).setFill()
@@ -143,7 +149,7 @@ final class StudioColorWell:NSColorWell {
         let rgb = color.usingColorSpace(.sRGB)
         func channel(_ value:CGFloat) -> Int { value.isFinite ? Int((min(1,max(0,value))*255).rounded()) : 0 }
         let hex = rgb.map { String(format:"#%02X%02X%02X",channel($0.redComponent),channel($0.greenComponent),channel($0.blueComponent)) } ?? "Color"
-        (hex as NSString).draw(at:CGPoint(x:29,y:bounds.midY-6.5),withAttributes:[.font:NSFont.monospacedSystemFont(ofSize:10,weight:.medium),.foregroundColor:NSColor.secondaryLabelColor])
+        (hex as NSString).draw(at:CGPoint(x:29,y:bounds.midY-7),withAttributes:[.font:NSFont.monospacedSystemFont(ofSize:11,weight:.medium),.foregroundColor:NSColor.secondaryLabelColor])
         Brand.symbol("chevron.down",size:8)?.withSymbolConfiguration(.init(paletteColors:[.secondaryLabelColor]))?.draw(in:CGRect(x:bounds.maxX-12,y:bounds.midY-3,width:7,height:6),from:.zero,operation:.sourceOver,fraction:0.7,respectFlipped:true,hints:nil)
     }
 }

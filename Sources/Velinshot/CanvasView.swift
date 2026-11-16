@@ -88,7 +88,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         setAccessibilityRole(.image)
         setAccessibilityLabel("Screenshot canvas")
         setAccessibilityValue("\(state.annotations.count) annotations")
-        setAccessibilityHelp("Choose a drawing tool, then drag on the screenshot. C copies. S saves. Delete removes a selected annotation.")
+        setAccessibilityHelp("Draw anywhere in the framed canvas. C copies. S saves. In Select, Tab and Shift-Tab cycle marks, including hidden marks. Delete removes the selected mark. Escape or tabbing past the last mark leaves the canvas.")
         requestRender()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -109,17 +109,17 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     private func sourcePoint(_ point: CGPoint, clamp: Bool = true) -> CGPoint? {
         guard let layout else { return nil }
         let display = displayRect
+        guard display.width > 0,display.height > 0 else { return nil }
         let canvas = CGPoint(x: (point.x-display.minX) / display.width * layout.canvasSize.width,
                              y: (point.y-display.minY) / display.height * layout.canvasSize.height)
-        if !clamp, !layout.imageRect.contains(canvas) { return nil }
-        let x = (canvas.x-layout.imageRect.minX) / layout.imageRect.width * layout.cropRect.width + layout.cropRect.minX
-        let y = (canvas.y-layout.imageRect.minY) / layout.imageRect.height * layout.cropRect.height + layout.cropRect.minY
-        return CGPoint(x: max(layout.cropRect.minX,min(layout.cropRect.maxX,x)), y: max(layout.cropRect.minY,min(layout.cropRect.maxY,y)))
+        let source = layout.sourcePoint(forComposition:canvas)
+        let limits = tool == .crop || tool == .blur ? layout.cropRect : layout.canvasBoundsInSource
+        if !clamp,!limits.contains(source) { return nil }
+        return CGPoint(x:max(limits.minX,min(limits.maxX,source.x)),y:max(limits.minY,min(limits.maxY,source.y)))
     }
     private func viewPoint(_ point: CGPoint) -> CGPoint {
         guard let layout else { return .zero }
-        let canvas = CGPoint(x: layout.imageRect.minX + (point.x-layout.cropRect.minX)/layout.cropRect.width * layout.imageRect.width,
-                             y: layout.imageRect.minY + (point.y-layout.cropRect.minY)/layout.cropRect.height * layout.imageRect.height)
+        let canvas = layout.compositionPoint(forSource:point)
         return CGPoint(x: displayRect.minX+canvas.x/layout.canvasSize.width*displayRect.width,
                        y: displayRect.minY+canvas.y/layout.canvasSize.height*displayRect.height)
     }
@@ -202,7 +202,23 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         return CGRect(x: xs.min() ?? first.x, y: ys.min() ?? first.y, width: max(1,(xs.max() ?? first.x)-(xs.min() ?? first.x)),height:max(1,(ys.max() ?? first.y)-(ys.min() ?? first.y))).insetBy(dx: -annotation.lineWidth/2,dy:-annotation.lineWidth/2)
     }
     override func resetCursorRects() { addCursorRect(bounds,cursor: tool == .select ? .arrow : .crosshair) }
-    override func keyDown(with event:NSEvent) { if onKey?(event) != true { super.keyDown(with:event) } }
+    override func keyDown(with event:NSEvent) {
+        if tool == .select,event.keyCode == 48 {
+            finishText();finishPointerGesture()
+            let backwards = event.modifierFlags.contains(.shift)
+            let next = selectedIndex.map{$0 + (backwards ? -1 : 1)} ?? (backwards ? state.annotations.count-1 : 0)
+            if state.annotations.indices.contains(next) {
+                selectedIndex = next;onSelection?(state.annotations[next]);needsDisplay = true
+                setAccessibilityValue("\(state.annotations.count) annotations; selected \(next+1), \(state.annotations[next].kind.rawValue)")
+            } else {
+                clearSelection()
+                if backwards { window?.selectPreviousKeyView(self) } else { window?.selectNextKeyView(self) }
+            }
+            return
+        }
+        if tool == .select,event.keyCode == 53 { clearSelection();window?.makeFirstResponder(nil);return }
+        if onKey?(event) != true { super.keyDown(with:event) }
+    }
     override func mouseDown(with event: NSEvent) {
         finishText()
         window?.makeFirstResponder(self)
@@ -214,12 +230,17 @@ final class CanvasView: NSView, NSTextFieldDelegate {
                 gestureBefore = state;gestureStart = sourcePoint(viewLocation);resizeCorner = corner;return
             }
         }
-        if event.clickCount == 2,sourcePoint(viewLocation,clamp:false) == nil { onBackgroundDoubleClick?();return }
-        guard let point = sourcePoint(viewLocation,clamp:false) else { selectedIndex = nil; needsDisplay = true; return }
+        guard let point = sourcePoint(viewLocation,clamp:false) else {
+            if tool == .select,event.clickCount == 2 { onBackgroundDoubleClick?() }
+            clearSelection();return
+        }
+        let hit = tool == .select ? state.annotations.indices.reversed().first { annotationBounds(state.annotations[$0]).insetBy(dx:-10,dy:-10).contains(point) } : nil
+        if tool == .select,event.clickCount == 2,hit == nil,layout?.cropRect.contains(point) == false {
+            onBackgroundDoubleClick?();return
+        }
         gestureBefore = state; gestureStart = point; draftIndex = nil;resizeCorner = nil
         if tool == .select {
-            let tolerance: CGFloat = 10
-            selectedIndex = state.annotations.indices.reversed().first { annotationBounds(state.annotations[$0]).insetBy(dx:-tolerance,dy:-tolerance).contains(point) }
+            selectedIndex = hit
             onSelection?(selectedIndex.map{state.annotations[$0]})
             if event.clickCount == 2,let index = selectedIndex,state.annotations[index].kind == .text,let origin = state.annotations[index].points.first { startText(at:origin,annotationIndex:index) }
             needsDisplay = true; return
@@ -252,6 +273,15 @@ final class CanvasView: NSView, NSTextFieldDelegate {
                 } else if tool == .arrow || tool == .line {
                     let angle = (atan2(dy,dx)/(.pi/4)).rounded()*(.pi/4),length = hypot(dx,dy)
                     point = CGPoint(x:start.x+cos(angle)*length,y:start.y+sin(angle)*length)
+                }
+                if let limits = layout?.canvasBoundsInSource {
+                    let dx = point.x-start.x,dy = point.y-start.y
+                    var fraction:CGFloat = 1
+                    if dx>0 { fraction = min(fraction,(limits.maxX-start.x)/dx) }
+                    if dx<0 { fraction = min(fraction,(limits.minX-start.x)/dx) }
+                    if dy>0 { fraction = min(fraction,(limits.maxY-start.y)/dy) }
+                    if dy<0 { fraction = min(fraction,(limits.minY-start.y)/dy) }
+                    point = CGPoint(x:start.x+dx*max(0,fraction),y:start.y+dy*max(0,fraction))
                 }
             }
             if tool == .pen || tool == .highlighter {
@@ -322,7 +352,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         guard let index = selectedIndex, state.annotations.indices.contains(index) else { return }
         let before = state; state.annotations.remove(at:index);clearSelection();onCommit?(before,state)
     }
-    func clearSelection() { selectedIndex = nil;onSelection?(nil);needsDisplay = true }
+    func clearSelection() { selectedIndex = nil;onSelection?(nil);setAccessibilityValue("\(state.annotations.count) annotations");needsDisplay = true }
     func changeSelection(color:RGBA? = nil,lineWidth:Double? = nil,fontSize:Double? = nil) {
         guard let index = selectedIndex,state.annotations.indices.contains(index) else { return }
         let before = state

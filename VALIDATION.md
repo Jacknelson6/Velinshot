@@ -1,11 +1,11 @@
 # Preview status
 
-This integration branch includes the runnable native preview and complete source. The published feature remains under review in [PR 1](https://github.com/Jacknelson6/Velinshot/pull/1). Live acceptance remains open; preparing this branch does not publish an app release or pass those checks.
+This repository contains the runnable native preview and complete source. The preview is free and MIT licensed. A stable app release has not been published.
 
-Source 68722db56862b34c3bfa4a4dc3d2ab2343c9e3c4 passes [full-Xcode CI](https://github.com/Jacknelson6/Velinshot/actions/runs/43818101131): all 90 XCTest cases, release compilation and bundle verification. The local gate also passed 10 assertion-failure probes, 92 native integration checks, actual image decode/encode and OCR.
+The current local gate passes 115 core scenario bodies, 10 assertion-failure probes and 135 native checks, plus release compilation, actual image decode/encode, OCR and bundle verification. This Mac uses the documented Command Line Tools assertion harness, not XCTest. Earlier source passed [90 hosted XCTest cases](https://github.com/Jacknelson6/Velinshot/actions/runs/43818101131); that historical result does not validate the current source. Current hosted CI is tracked separately.
 
-Live synthetic GUI checks cover drawing, text entry, undo, copy/close, clipboard reopening, PNG/JPEG export and native save cancellation, presets and the Share picker. The exact packaged 68722db app passed launch, shortcut retry message synchronization and Save/cancel/C copy-close.
+Native gesture checks cover arrows wholly on the mat, crossing the photo edge, selection, movement, resizing, undo/redo, text editing and recovery of hidden marks. Automatic inset checks cover cropped palette changes, manual overrides, saved-style compatibility and stale results. Native light/dark renders at default and minimum sizes received independent visual review.
 
-Live area/window/display capture and physical global-hotkey end-to-end behavior remain pending the owner's Screen Recording approval. Finder receiving a promised file is unconfirmed; native image drag and isolated file-promise checks passed. Multi-display capture and a real logout/login cycle remain separate checks.
+The owner confirmed capture works in the installed 4fd7102 build after its stale Screen Recording signature binding was repaired. A changed ad-hoc binary may need fresh consent. Mode-by-mode area/window/display and physical global-hotkey acceptance, Finder receiving a promised file, final Share destination readback, multiple displays and a real logout/login cycle remain separate checks. Prior live synthetic GUI checks cover drawing, text, copy/close, PNG/JPEG save, cancellation, presets and the Share picker.
 
-The candidate is an Apple Silicon app of 2,141,559 bytes, using system frameworks only. It is locally ad-hoc signed, without Developer ID or notarization. No final app release, live capture acceptance, universal zero-CPU claim or perfect reliability is claimed. Performance and additional test scope are documented on the source branch.
+The Apple Silicon app is about 2.2 MB and uses system frameworks only. It is ad-hoc signed, without Developer ID or notarization. [Detailed QA](docs/QA.md) and [performance evidence](docs/PERFORMANCE.md) describe the measured scope and remaining checks.
