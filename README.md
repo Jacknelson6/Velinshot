@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="brand/logo.png" width="112" alt="Velinshot folded V logo">
   <h1>Velinshot</h1>
   <p><strong>A good screenshot. In a moment.</strong></p>
   <p>Capture, frame, mark it up. Copy and carry on.</p>
@@ -9,12 +8,12 @@
     <img alt="Swift and AppKit" src="https://img.shields.io/badge/built_with-Swift_%26_AppKit-F05138?style=flat-square">
     <a href="https://github.com/Jacknelson6/Velinshot/actions/runs/43818101131"><img alt="90 XCTest cases passed" src="https://img.shields.io/badge/tests-90_XCTest_passed-7160E8?style=flat-square"></a>
   </p>
-  <p><a href="https://github.com/Jacknelson6/Velinshot/tree/feature/native-macos">Source</a> · <a href="#make-it-yours">Build the preview</a> · <a href="https://github.com/Jacknelson6/Velinshot/blob/feature/native-macos/docs/FEATURES.md">Features</a> · <a href="brand/BRAND.md">Brand kit</a></p>
+  <p><a href="https://github.com/Jacknelson6/Velinshot/tree/feature/native-macos">Source</a> · <a href="#make-it-yours">Build the preview</a> · <a href="https://github.com/Jacknelson6/Velinshot/blob/feature/native-macos/docs/FEATURES.md">Features</a></p>
 </div>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="brand/editor-dark.png">
-  <img src="brand/editor.png" alt="Velinshot framing and annotating a synthetic screenshot">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/editor-dark.png">
+  <img src="docs/images/editor.png" alt="Velinshot framing and annotating a synthetic screenshot">
 </picture>
 
 <sub>Native UI rendered from the real app with a synthetic fixture.</sub>
@@ -41,7 +40,7 @@ Local OCR lets you select and copy the words in your image. Automatic PII detect
 
 | Backdrop | Output |
 |---|---|
-| ![Backdrop controls in the native editor](brand/editor-backdrop.png) | ![Output controls in the native editor](brand/editor-output.png) |
+| ![Backdrop controls in the native editor](docs/images/editor-backdrop.png) | ![Output controls in the native editor](docs/images/editor-output.png) |
 
 <sub>Real native views, shown with the same synthetic screenshot.</sub>
 
@@ -60,7 +59,7 @@ The build script makes an app bundle with a local ad-hoc signature. A Developer 
 
 On first capture, allow **Velinshot** in **System Settings → Privacy & Security → Screen & System Audio Recording**. The Settings window has a shortcut to that pane. macOS may require a relaunch, and a newly rebuilt ad-hoc app may need consent again.
 
-**Already running Xnapper?** Velinshot protects its known default shortcuts. Quit Xnapper to use ⌘4, or record another shortcut in Velinshot Settings. ⌘⇧2 is offered as an alternative. No incumbent settings are changed.
+**Shortcut already in use?** If macOS refuses the selected shortcut, record another one in Settings or try ⌘⇧2.
 
 ## Your hands can stay on the keyboard
 
@@ -103,12 +102,7 @@ Full Xcode runs the XCTest suite. Command Line Tools installations without XCTes
 
 Hosted CI runs XCTest, a release build and bundle validation. Screen Recording and real drag/Share flows require a Mac GUI and are reported separately. See [validation notes](https://github.com/Jacknelson6/Velinshot/blob/feature/native-macos/docs/QA.md) for evidence and remaining permission-dependent checks.
 
-## The identity
-
-![Velinshot brand kit](brand/brand-kit.png)
-
-The folded V is an original generated identity, selected from twelve concepts across four directions. [The brand kit](brand/BRAND.md) includes the transparent mark, app icon, light/dark wordmarks, palette, type, image board and generation prompts.
 
 Contributions are welcome. [Read the guide](CONTRIBUTING.md), keep the app small, and make the screenshot better.
 
-[MIT licensed](LICENSE). Manrope is distributed separately under the SIL Open Font License in `brand/fonts`.
+[MIT licensed](LICENSE).
