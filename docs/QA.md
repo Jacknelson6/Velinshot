@@ -4,7 +4,7 @@ Compilation, automated checks, actual native GUI exercises and OS-consent-depend
 
 ## Current local gate
 
-The current editor candidate passes **115 core scenario bodies, 10 assertion failure probes and 135 native integration checks**, plus release compilation, actual image decode/encode, Vision OCR and bundle/signature/linkage validation. All 90 earlier core scenarios remain unchanged. Additional seeded tests compare exact balance against the prior brute-force oracle on 886 thin, threshold, random, transparent and edge fixtures.
+The current editor candidate passes **115 core scenario bodies, 10 assertion failure probes and 152 native integration checks**, plus release compilation, actual image decode/encode, Vision OCR and bundle/signature/linkage validation. All 90 earlier core scenarios remain unchanged. Additional seeded tests compare exact balance against the prior brute-force oracle on 886 thin, threshold, random, transparent and edge fixtures.
 
 This Mac has Command Line Tools without XCTest or Swift Testing. `scripts/core-checks.py` runs the same source scenario bodies in an explicitly identified native assertion harness. Unsupported constructs fail rather than being skipped. These are not reported as XCTest results. Hosted full-Xcode CI runs XCTest separately.
 

@@ -6,7 +6,7 @@
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-7160E8?style=flat-square"></a>
     <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-191A25?style=flat-square">
     <img alt="Swift and AppKit" src="https://img.shields.io/badge/built_with-Swift_%26_AppKit-F05138?style=flat-square">
-    <a href="docs/QA.md"><img alt="Local checks: 115 core scenarios and 135 native checks" src="https://img.shields.io/badge/local_checks-115_core_%2B_135_native-7160E8?style=flat-square"></a>
+    <a href="docs/QA.md"><img alt="Local checks: 115 core scenarios and 152 native checks" src="https://img.shields.io/badge/local_checks-115_core_%2B_152_native-7160E8?style=flat-square"></a>
   </p>
   <p><a href="Sources">Source</a> · <a href="#make-it-yours">Build the preview</a> · <a href="docs/FEATURES.md">Features</a></p>
 </div>

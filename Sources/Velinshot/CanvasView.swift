@@ -53,6 +53,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     var lineWidth: Double = 6
     var fontSize: Double = 36
     var onCommit: ((EditState, EditState) -> Void)?
+    var onGestureEnd:(()->Void)?
     var onError: ((Error) -> Void)?
     var onImportURL: ((URL) -> Void)?
     var onImportData: ((Data) -> Void)?
@@ -216,7 +217,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             }
             return
         }
-        if tool == .select,event.keyCode == 53 { clearSelection();window?.makeFirstResponder(nil);return }
+        if tool == .select,event.keyCode == 53 { cancelPointerGesture();clearSelection();window?.makeFirstResponder(nil);return }
         if onKey?(event) != true { super.keyDown(with:event) }
     }
     override func mouseDown(with event: NSEvent) {
@@ -310,6 +311,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     private func completeGesture() {
         if let before = gestureBefore, before != state { onCommit?(before,state) }
         gestureBefore = nil; gestureStart = nil; draftIndex = nil; cropDraft = nil;resizeCorner = nil; needsDisplay = true
+        onGestureEnd?()
     }
     private func startText(at point: CGPoint,annotationIndex:Int? = nil) {
         onTextEditingChange?(true)

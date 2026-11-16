@@ -107,6 +107,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         window.onKey = { [weak self] in self?.handleKey($0) ?? false }
         buildInterface()
         canvas.onCommit = { [weak self] before, after in self?.commit(before:before,after:after) }
+        canvas.onGestureEnd = { [weak self] in self?.scheduleInsetRefresh() }
         canvas.onError = { [weak self] in self?.setStatus($0.localizedDescription,error:true) }
         canvas.onImportURL = { [weak self] in self?.onImportURL?($0) }
         canvas.onImportData = { [weak self] in self?.onImportData?($0) }
@@ -129,6 +130,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
     var state: EditState { canvas.state }
+    var insetAnalysisPending:Bool { insetRefreshPending || insetJobCrop != nil }
     var canUndo:Bool { editorUndo.canUndo }
     var canRedo:Bool { editorUndo.canRedo }
     override func showWindow(_ sender: Any?) {
@@ -484,7 +486,11 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         if enabled { requestAnalysis(balance:false,colors:true) }
         else { cancelAnalysis();change{$0.style.autoColor = false} }
     }
-    private func cancelAnalysis() { analysisWork.cancel();insetJobCrop = nil }
+    private func cancelAnalysis() {
+        if analysisWork.isBusy,insetJobCrop == nil { setStatus("Ready") }
+        analysisWork.cancel();insetJobCrop = nil
+        scheduleInsetRefresh()
+    }
     private func setAutomaticInset(_ enabled:Bool) {
         cancelAnalysis();insetRefreshPending = enabled;preferences.autoInsetFill = enabled
         change{$0.style.autoInsetColor = enabled};scheduleInsetRefresh()
@@ -514,6 +520,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             return
         }
         if let pending = insetJobCrop,pending.bounds == crop { return }
+        guard !analysisWork.isBusy else { return }
         let source = source,cached = analysis
         insetJobCrop = KnownContentBounds(bounds:crop)
         analysisWork.submit(work:{ ticket in
@@ -522,6 +529,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             return value
         }) { [weak self] result in
             guard let self,!self.userIsClosing else { return };self.insetJobCrop = nil
+            defer { self.scheduleInsetRefresh() }
             switch result {
             case .success(let value):
                 self.analysis.insetColor = value.insetColor;self.analysis.insetCrop = value.insetCrop
@@ -549,6 +557,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             return result
         }) { [weak self] result in
             guard let self,!self.userIsClosing else { return }
+            defer { self.scheduleInsetRefresh() }
             switch result {
             case .success(let value):
                 self.analysis = value

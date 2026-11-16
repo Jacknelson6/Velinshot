@@ -57,15 +57,17 @@ final class CanvasMarkupTests: XCTestCase {
     }
 
     func testBlurStaysOnImageAndDoesNotEraseMatMarkup() throws {
-        let source = makeImage(width:100,height:60) { _,_ in (255,255,255,255) }
+        let source = makeImage(width:100,height:60) { x,_ in x.isMultiple(of:2) ? (255,255,255,255) : (0,0,0,255) }
         var state = matState()
-        state.annotations = [
-            Annotation(kind:.redact,points:[CGPoint(x:-15,y:0),CGPoint(x:-1,y:30)],color:RGBA(hex:"FF0000")),
-            Annotation(kind:.blur,points:[CGPoint(x:-20,y:-10),CGPoint(x:20,y:30)],lineWidth:8)
-        ]
-        let image = try CanvasRenderer.render(source:source,state:state)
-        XCTAssertEqual(pixel(image,20,45),Pixel(255,0,0,255))
-        XCTAssertEqual(pixel(image,40,45),Pixel(255,255,255,255))
+        let redact = Annotation(kind:.redact,points:[CGPoint(x:-15,y:0),CGPoint(x:-1,y:30)],color:RGBA(hex:"FF0000"))
+        let blur = Annotation(kind:.blur,points:[CGPoint(x:-20,y:-10),CGPoint(x:20,y:30)],lineWidth:8)
+        for marks in [[redact,blur],[blur,redact]] {
+            state.annotations = marks
+            let image = try CanvasRenderer.render(source:source,state:state)
+            XCTAssertEqual(pixel(image,20,45),Pixel(255,0,0,255))
+            XCTAssertGreaterThan(pixel(image,40,45).r,40)
+            XCTAssertLessThan(pixel(image,40,45).r,215)
+        }
     }
 
     func testMatAnnotationsPreserveListOrder() throws {

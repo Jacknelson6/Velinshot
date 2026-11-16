@@ -56,12 +56,27 @@ enum CanvasMarginChecks {
         try check(canvas.state.annotations[0].id==original.id,"mat resize preserves mark identity")
         try check(canvas.state.annotations[0].points != original.points,"resize handle works outside the image")
         editor.undoEdit();try check(canvas.state.annotations==[original],"mat resize undoes")
+        canvas.tool = .select
+        canvas.mouseDown(with:try mouse(.leftMouseDown,middle));canvas.mouseDragged(with:try mouse(.leftMouseDragged,moved))
+        guard let escape = NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:0,windowNumber:window.windowNumber,context:nil,characters:"\u{1B}",charactersIgnoringModifiers:"\u{1B}",isARepeat:false,keyCode:53) else { throw VelinshotError.invalidImage("Missing Escape event") }
+        canvas.keyDown(with:escape)
+        try check(canvas.state.annotations==[original] && !canvas.hasActiveGesture,"Escape cancels a Select drag before leaving canvas focus")
+        try check(selected==nil,"Escape clears the selection")
         var hidden = canvas.state;hidden.style.padding = 0;hidden.style.inset = 0;canvas.state = hidden;canvas.tool = .select
         guard let tab = NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:0,windowNumber:window.windowNumber,context:nil,characters:"\t",charactersIgnoringModifiers:"\t",isARepeat:false,keyCode:48) else { throw VelinshotError.invalidImage("Missing tab event") }
         canvas.keyDown(with:tab);try check(selected?.id==original.id,"Tab can select a hidden off-canvas mark")
         canvas.deleteSelection();try check(canvas.state.annotations.isEmpty,"hidden marks can be deleted")
         editor.undoEdit();try check(canvas.state.annotations==[original],"hidden mark deletion undoes")
         editor.redoEdit();try check(canvas.state.annotations.isEmpty,"hidden mark deletion redoes")
+        let second = Annotation(kind:.rectangle,points:[CGPoint(x:-60,y:-60),CGPoint(x:-40,y:-40)])
+        var cycling = hidden;cycling.annotations = [original,second];canvas.state = cycling;canvas.tool = .select
+        canvas.keyDown(with:tab);try check(selected?.id==original.id,"Tab starts with the first hidden mark")
+        canvas.keyDown(with:tab);try check(selected?.id==second.id,"Tab progresses to the next hidden mark")
+        canvas.keyDown(with:tab);try check(selected==nil,"Tab past the last mark clears selection")
+        guard let previous = NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[.shift],timestamp:0,windowNumber:window.windowNumber,context:nil,characters:"\t",charactersIgnoringModifiers:"\t",isARepeat:false,keyCode:48) else { throw VelinshotError.invalidImage("Missing Shift-Tab event") }
+        canvas.keyDown(with:previous);try check(selected?.id==second.id,"Shift-Tab from no selection starts at the last mark")
+        canvas.keyDown(with:previous);try check(selected?.id==original.id,"Shift-Tab progresses backwards")
+        canvas.keyDown(with:previous);try check(selected==nil,"Shift-Tab past the first mark clears selection")
         canvas.state = initial
         var copies = 0;canvas.onBackgroundDoubleClick = { copies += 1 }
         let empty = view(CGPoint(x:25,y:source.height+240))
@@ -76,7 +91,7 @@ enum CanvasMarginChecks {
         canvas.tool = .select;canvas.mouseDown(with:try mouse(.leftMouseDown,empty,clicks:2))
         try check(canvas.subviews.contains{$0 is NSTextField},"double-click edits mat text before considering background copy")
         canvas.finishText(cancel:true);try check(copies==1,"mat text editing never copies the image")
-        for (label,height) in [("Copy screenshot",36.0),("Save screenshot",36.0),("Share screenshot",36.0),("Arrow (A)",32.0)] {
+        for (label,height) in [("Copy screenshot",36.0),("Save screenshot",36.0),("Share screenshot",36.0),("Drag finished screenshot",36.0),("Arrow (A)",32.0)] {
             guard let button = all(root).compactMap({$0 as? StudioButton}).first(where:{$0.accessibilityLabel()==label}) else { throw VelinshotError.invalidImage("Missing \(label)") }
             try check(abs(button.frame.height-height)<0.01,"\(label) uses its declared visible control height")
         }

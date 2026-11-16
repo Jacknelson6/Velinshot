@@ -2,7 +2,7 @@
 
 This repository contains the runnable native preview and complete source. The preview is free and MIT licensed. A stable app release has not been published.
 
-The current local gate passes 115 core scenario bodies, 10 assertion-failure probes and 135 native checks, plus release compilation, actual image decode/encode, OCR and bundle verification. This Mac uses the documented Command Line Tools assertion harness, not XCTest. Earlier source passed [90 hosted XCTest cases](https://github.com/Jacknelson6/Velinshot/actions/runs/43818101131); that historical result does not validate the current source. Current hosted CI is tracked separately.
+The current local gate passes 115 core scenario bodies, 10 assertion-failure probes and 152 native checks, plus release compilation, actual image decode/encode, OCR and bundle verification. This Mac uses the documented Command Line Tools assertion harness, not XCTest. Earlier source passed [90 hosted XCTest cases](https://github.com/Jacknelson6/Velinshot/actions/runs/43818101131); that historical result does not validate the current source. Current hosted CI is tracked separately.
 
 Native gesture checks cover arrows wholly on the mat, crossing the photo edge, selection, movement, resizing, undo/redo, text editing and recovery of hidden marks. Automatic inset checks cover cropped palette changes, manual overrides, saved-style compatibility and stale results. Native light/dark renders at default and minimum sizes received independent visual review.
 

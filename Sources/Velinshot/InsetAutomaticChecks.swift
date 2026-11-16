@@ -41,6 +41,11 @@ enum InsetAutomaticChecks {
             while !condition(),Date()<end { _ = RunLoop.main.run(mode:.default,before:Date().addingTimeInterval(0.01)) }
             return condition()
         }
+        func waitForWork()->Bool {
+            var finished = false
+            DispatchQueue.main.async { ImageWork.queue.async { DispatchQueue.main.async { finished = true } } }
+            return waitFor{finished}
+        }
         try check(waitFor{blue(canvas.state.style.insetColor)},"Auto restores cached palette without a manual color sticking")
         try check(canvas.state.style.autoInsetColor && preferences.autoInsetFill,"Auto mode persists")
         editor.undoEdit();try check(!canvas.state.style.autoInsetColor && canvas.state.style.insetColor==green,"derived color adds no separate undo step")
@@ -69,6 +74,33 @@ enum InsetAutomaticChecks {
         canvas.mouseDown(with:try mouse(.leftMouseDown,first));canvas.mouseDragged(with:try mouse(.leftMouseDragged,last));canvas.mouseUp(with:try mouse(.leftMouseUp,last))
         try check(waitFor{red(canvas.state.style.insetColor)},"an automatic document can still update after another document chooses manual defaults")
         try check(!preferences.autoInsetFill && preferences.style.insetColor==green,"late automatic results preserve a newer manual default")
+        editor.undoEdit()
+        try check(waitFor{!editor.insetAnalysisPending && canvas.state.crop==nil && blue(canvas.state.style.insetColor)},"undo restores the full-image palette before a cancellation check")
+        canvas.tool = .crop
+        canvas.mouseDown(with:try mouse(.leftMouseDown,first));canvas.mouseDragged(with:try mouse(.leftMouseDragged,last));canvas.mouseUp(with:try mouse(.leftMouseUp,last))
+        let pointerDown = try mouse(.leftMouseDown,center),pointerDrag = try mouse(.leftMouseDragged,finish)
+        var gestureStarted = false
+        DispatchQueue.main.async {
+            canvas.tool = .arrow;canvas.mouseDown(with:pointerDown);canvas.mouseDragged(with:pointerDrag);gestureStarted = true
+        }
+        try check(waitForWork() && gestureStarted && canvas.hasActiveGesture && blue(canvas.state.style.insetColor),"worker completion cannot install a palette during a gesture")
+        editor.undoEdit()
+        try check(waitFor{red(canvas.state.style.insetColor)} && !canvas.hasActiveGesture,"canceling an unchanged gesture resumes the waiting palette")
+        editor.undoEdit()
+        try check(waitFor{!editor.insetAnalysisPending && canvas.state.crop==nil && blue(canvas.state.style.insetColor)},"full palette is ready before a pending manual override")
+        canvas.tool = .crop
+        canvas.mouseDown(with:try mouse(.leftMouseDown,first));canvas.mouseDragged(with:try mouse(.leftMouseDragged,last));canvas.mouseUp(with:try mouse(.leftMouseUp,last))
+        var manualSent = false
+        DispatchQueue.main.async {
+            well.color = NSColor(srgbRed:0,green:1,blue:0,alpha:1);_ = well.sendAction(well.action,to:well.target);manualSent = true
+        }
+        try check(waitForWork() && manualSent,"manual color action follows submission of the queued crop palette")
+        try check(!canvas.state.style.autoInsetColor && canvas.state.style.insetColor==green && !preferences.autoInsetFill,"pending automatic results cannot replace a manual color")
+        guard let balance = all(root).compactMap({$0 as? NSButton}).first(where:{$0.title=="Auto balance"}) else { throw VelinshotError.invalidImage("Missing balance control") }
+        balance.state = .on;_ = balance.sendAction(balance.action,to:balance.target)
+        try check(all(root).compactMap{$0 as? NSTextField}.contains{$0.stringValue.hasPrefix("Balancing your image")},"balance request has a visible working status")
+        well.color = NSColor(srgbRed:0,green:1,blue:0,alpha:1);_ = well.sendAction(well.action,to:well.target)
+        try check(waitForWork() && !all(root).compactMap{$0 as? NSTextField}.contains{$0.stringValue.hasPrefix("Balancing your image")},"canceling analysis clears its working status")
         return count
     }
 }
