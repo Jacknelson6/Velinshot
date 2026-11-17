@@ -30,9 +30,12 @@ internal static class UpdateChecks
                 if (command == "--update-fixture-relaunched")
                 {
                     var current = UpdateRelease.Current();
+#pragma warning disable IL3000 // The fixture intentionally proves this property is empty after single-file publishing.
+                    var assemblyLocation = Assembly.GetExecutingAssembly().Location;
+#pragma warning restore IL3000
                     var proof = new { version = current.Version, sourceCommit = current.SourceCommit, fixtureBuild = current.FixtureBuild,
                         supportDirectory = AppSettings.SupportDirectory, filename = app.Settings.Filename,
-                        executablePath = Environment.ProcessPath, singleFileAssemblyLocation = Assembly.GetExecutingAssembly().Location };
+                        executablePath = Environment.ProcessPath, singleFileAssemblyLocation = assemblyLocation };
                     File.WriteAllText(Path.Combine(folder, "relaunch-proof.json"), JsonSerializer.Serialize(proof));
                     app.Shutdown(0); return;
                 }
