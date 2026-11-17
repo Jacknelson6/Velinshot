@@ -53,6 +53,10 @@ Built with Swift, AppKit and system frameworks. No external package dependencies
 
 No account, subscription, analytics or required watermark. Screenshots stay on your Mac unless you share them. History is off by default. **Check for Updates** opens the public GitHub releases page in your browser, including preview releases. Automatic PII detection is excluded; manual blur and redaction are available.
 
+## Windows
+
+A Windows 10 and 11 edition lives in [`windows/`](windows/README.md): the same capture, edit and copy workflow, built natively with C#, .NET 10 and WPF. Presets and history use the same file formats as the macOS app.
+
 ## Build from source
 
 Requires macOS 14 or later and Apple's Swift toolchain. The [package manifest](Package.swift) declares Swift 5.9 tools or later.

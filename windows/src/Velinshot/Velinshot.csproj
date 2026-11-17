@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <!-- Windows Forms supplies only the notification-area icon and the classic color dialog. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>Velinshot</RootNamespace>
+    <AssemblyName>Velinshot</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\Resources\Velinshot.ico</ApplicationIcon>
+    <StartupObject>Velinshot.Program</StartupObject>
+    <!-- Source-generated P/Invoke (LibraryImport) marshalling. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- WFO0003 targets Windows Forms apps; this WPF app correctly declares per-monitor-v2 DPI in app.manifest. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Keep WPF types unambiguous: Windows Forms and System.Drawing are referenced by full name. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Velinshot.Core\Velinshot.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The app icon is shared with the macOS app at the repository root. -->
+    <Resource Include="..\..\..\Resources\AppIcon.png" Link="Resources\AppIcon.png" />
+    <Resource Include="..\..\Resources\Velinshot.ico" Link="Resources\Velinshot.ico" />
+  </ItemGroup>
+</Project>
