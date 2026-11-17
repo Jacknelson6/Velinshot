@@ -9,6 +9,7 @@
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>1.0.0</string>
   <key>CFBundleVersion</key><string>3</string>
+  <key>SUPublicEDKey</key><string>dYKv1N/45nuOjajfZQow1xMUzslgLOdHJArBfvn8ZM8=</string>
   <key>SUFeedURL</key><string>https://raw.githubusercontent.com/Jacknelson6/Velinshot/updates/appcast.xml</string>
   <key>SUEnableAutomaticChecks</key><false/>
   <key>SUAutomaticallyUpdate</key><false/>

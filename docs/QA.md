@@ -4,21 +4,33 @@ This is a prerelease. Automated checks, native editing, live capture and cross-a
 
 ## Current preview
 
-The [current preview](https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.2) targets Apple Silicon and macOS 14 or later. [Build metadata](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.2/BUILD-INFO.json) records its exact source revision, executable hash, architecture and signing status. [Archive checksums](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.2/SHA256SUMS.txt) cover the ZIP, disk image and metadata.
+The [current preview](https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.3) includes separate native Mac and Windows downloads. The Mac download targets Apple Silicon and macOS 14 or later. [Build metadata](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/BUILD-INFO.json) records its exact source revision, executable hash, architecture and signing status. [Archive checksums](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/SHA256SUMS.txt) cover the Mac ZIP, disk image and metadata. [Windows validation](../windows/docs/QA.md) is recorded separately.
 
 The preview is ad-hoc signed without Developer ID or notarization. The development Mac currently has no valid Developer ID signing identity. Installation to Applications keeps the path stable but does not remove Gatekeeper's first-launch approval. Screen Recording consent is separate and belongs to the installed app's signature. See [installation](../README.md#download-and-open), [capture access](USAGE.md#capture-access) and the [trusted-signing workflow](../CONTRIBUTING.md#signing-and-notarization).
 
-This revision adds native regression coverage for multi-display geometry, capture-session state, inactive-overlay first-mouse acceptance, display choice, larger editor targets, moved actions and access to secondary tools. Physical capture across two monitors still needs a connected second display. Automated geometry checks are not a physical multi-monitor pass.
+Regression coverage includes multi-display geometry, capture-session state, inactive-overlay first-mouse acceptance, display choice, larger editor targets, moved actions and access to secondary tools. Physical capture across two monitors has not been recorded as passed. Automated geometry checks are not a physical multi-monitor pass.
 
 ## Current automated checks
 
 | Environment | Result |
 |---|---|
-| Local Apple Silicon, Swift 6.3.2, Command Line Tools | 123 core scenarios through the native assertion fallback, zero failures, and 451 native integration checks passed |
-| Native bundle | Optimized compilation, strict ad-hoc signature, stable identity and system-framework linkage passed |
+| Local Apple Silicon, Swift 6.3.2, Command Line Tools | 130 core scenarios through the native assertion fallback, zero failures, 34 Python publication/security checks and 560 native integration checks passed |
+| Native bundle | Optimized compilation, strict ad-hoc signature, stable identity, embedded Sparkle 2.10.1 and nested framework/helper linkage passed |
 | Installer, private temporary fixture | Running-app refusal, previous-app backup and restoration after a controlled final-verification failure passed |
 
 The added editor checks exercise common and secondary tools, all letter shortcuts, moved menu actions, text focus, real crop/reset and selected Blur strength, plus default/minimum-size layout and expanded-inspector access in light and dark appearances. Capture checks cover synthetic display geometry, hidden overlay first-mouse behavior and guarded session state. Physical capture and cross-app receipt remain separate checks below.
+
+## Preview 3 corner and updater checks
+
+The renderer uses the same native continuous corner path for the screenshot, panel and blur clips. Seven added core cases compare alpha pixels with the native path, exercise radius limits and preserve the zero-radius case. The old circular renderer failed the new pixel oracle. Independent source and visual reviews accepted the continuous corners and preview/export agreement; the visual sample does not independently prove every border, inset or blur combination.
+
+The production updater controller was compiled into a separate synthetic app with its own bundle identifier, preferences and public RFC test key. Actual Sparkle HTTPS downloads, replacement and relaunch reached the exact expected version 2 executable. Modified signed feeds and archives were refused without replacing version 1. A missing feed produced a native error; correcting that feed allowed the same process to retry and cancel safely. A background notification was observed with automatic checking enabled in the isolated fixture.
+
+Actual installation attempts during capture, import and an open editor were refused. The editor retained its changed test note. Closing it allowed a second attempt to install and relaunch successfully, proving the aborted cycle did not permanently block updates. The fixture never replaced the production application or used its signing account. A separate official-generator check retained the prior signed release entry when preparing a second release.
+
+## Preview 2 capture diagnosis
+
+The installed preview 2 captured a separate native checkerboard app in both area and full-display modes, with exported pixels checked against its magenta/green content. This did not reproduce the reported desktop-only result. Window capture produced one stream-start error during a display transition and remains unconfirmed. The display-change cancellation guard activated when the physical display configuration changed. Full-screen Spaces and physical two-display gestures remain manual gaps.
 
 ## Recorded preview 1 checks
 

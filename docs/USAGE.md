@@ -1,5 +1,23 @@
 # User guide
 
+## Install and open
+
+The Mac preview requires **Apple Silicon and macOS 14 or later**. [Download it here](../README.md#download-and-open).
+
+Save open screenshots and quit any running copy of Velinshot first. Open the disk image and drag **Velinshot.app** onto **Applications**, then open `/Applications/Velinshot.app`. For the ZIP archive, unzip it and move the app into Applications. Keep that installed copy in one location before granting capture access.
+
+The preview is ad-hoc signed and **not notarized** by Apple. If macOS says it could not verify Velinshot:
+
+1. Click **Done** in the blocked-opening alert.
+2. Go to **System Settings → Privacy & Security** and scroll to **Security**.
+3. Click **Open Anyway** beside Velinshot, then confirm the opening prompt. Authenticate if macOS asks.
+
+See [Apple's first-launch instructions](https://support.apple.com/en-us/102445).
+
+Moving the app into Applications keeps its location consistent. Removing this first-launch approval for public downloads requires Developer ID signing and Apple notarization, which this preview does not have. The [contributor release guide](../CONTRIBUTING.md#signing-and-notarization) describes that path.
+
+For capture, enable **Velinshot** under **Privacy & Security → Screen & System Audio Recording**, then relaunch if requested. See [capture access](#capture-access) for permission and shortcut troubleshooting.
+
 ## Capture and import
 
 Press **⌘4** to capture and edit. Each connected display gets an overlay. Move the pointer to the display you want, then drag an area; the first click starts selection even on a different monitor. You can drag across display boundaries. **Space** switches to window selection. **Escape** cancels. Set a different global shortcut in Settings if needed.
@@ -51,7 +69,7 @@ Drag export advertises a promised PNG file and PNG pasteboard data. **More → S
 
 ## Capture access
 
-Install into **Applications** and open that copy before allowing Velinshot in **System Settings → Privacy & Security → Screen & System Audio Recording**. Settings has a shortcut to that pane. Relaunch if macOS asks. First-launch Gatekeeper approval is a [separate step](../README.md#download-and-open).
+Install into **Applications** and open that copy before allowing Velinshot in **System Settings → Privacy & Security → Screen & System Audio Recording**. Settings has a shortcut to that pane. Relaunch if macOS asks. First-launch Gatekeeper approval is a [separate step](#install-and-open).
 
 If access appears enabled but capture fails after replacing a locally built app, the permission may belong to an older signature. Use **Show This App in Finder** in Settings to identify the current copy, then refresh that app's Screen Recording entry. A rebuilt ad-hoc app can require consent again.
 
@@ -62,3 +80,19 @@ If a shortcut is unavailable, use **Retry shortcuts** or record another combinat
 History is off by default. When enabled, it keeps at most **50 entries or 250 MB** in Application Support, or a dedicated `Velinshot History` subfolder at your chosen location. Presets and imported background assets are stored locally. The most recently closed screenshot stays in memory until replaced or the app quits.
 
 Image input is limited to **40 megapixels**, **16,384 pixels per side** and **250 MB encoded input**. Fixed-size exports fit the source uniformly and fill extra space with the selected background. Watermark text can be rejected if the chosen output is too small; clear it or use a larger canvas. Dynamic or inaccessible wallpapers fall back to the current gradient.
+
+## Build from source
+
+Mac builds require macOS 14 or later and Apple's Swift toolchain. The [package manifest](../Package.swift) declares Swift 5.9 tools or later.
+
+```sh
+git clone https://github.com/Jacknelson6/Velinshot.git
+cd Velinshot
+bash scripts/build-app.sh
+bash scripts/install-app.sh
+open /Applications/Velinshot.app
+```
+
+The build creates a locally ad-hoc signed app. The installer verifies the bundle, refuses to replace a running app and preserves the previous installation. It also supports a destination such as `~/Applications/Velinshot.app`. See [Contributing](../CONTRIBUTING.md) for checks, packaging, backups and signing. Full Xcode runs XCTest; Command Line Tools use the documented native assertion fallback.
+
+For Windows SDK requirements and build commands, see [Windows builds](../windows/README.md#build-from-source).
