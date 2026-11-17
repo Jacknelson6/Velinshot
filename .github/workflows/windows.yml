@@ -88,7 +88,7 @@ jobs:
           echo '1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27  '"$RUNNER_TEMP/Sparkle.tar.xz" | shasum -a 256 -c -
           mkdir "$RUNNER_TEMP/sparkle-tools"
           tar -xf "$RUNNER_TEMP/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle-tools"
-      - name: Sign public RFC8032 fixtures in an isolated temporary Keychain
+      - name: Sign public RFC8032 fixtures with official file-mode tooling
         shell: bash
         run: |
           python3 windows/scripts/prepare-update.py --self-check

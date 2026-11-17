@@ -46,7 +46,7 @@ Windows needs no screen-recording permission. Content an app protects from captu
 
 ## Build from source
 
-Requires Windows 10 version 2004 or later, the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and PowerShell 7 for the packaging/check scripts. The updater uses pinned NetSparkle 3.1.0; NuGet restores its locked dependencies. Inno Setup 6 creates the standard installer.
+Requires Windows 10 version 2004 or later, the [.NET SDK 10.0.404](https://dotnet.microsoft.com/download/dotnet/10.0) pinned by `global.json`, and PowerShell 7 for the packaging/check scripts. The updater uses pinned NetSparkle 3.1.0; NuGet restores its locked dependencies. Inno Setup 6 creates the standard installer.
 
 ```powershell
 git clone https://github.com/Jacknelson6/Velinshot.git
@@ -74,6 +74,16 @@ python3 windows/scripts/prepare-update.py --tools /path/to/Sparkle/bin \
 The script only looks up an existing Windows key, verifies source/build/artifact identity and prepares public signatures over unchanged installer and XML bytes. It does not generate a production key or publish a release. Publish the feed and adjacent `.signature` together on the repository's `updates` branch under `windows/`; installers remain immutable assets of their versioned release. The x64 feed is `appcast.xml`, and the ARM64 feed is `appcast-arm64.xml`; publishing one must preserve the other. `python3 windows/scripts/prepare-update.py --self-check` checks this routing without accessing a key.
 
 Both Setup and the portable ZIP include official pinned package and bundled .NET runtime license files and notices under `ThirdPartyNotices`, with a hashed package manifest.
+
+CI fixture signing uses only the published RFC8032 test seed with the official tool's `--ed-key-file` mode. It never reads or changes a Keychain. The same helper also runs locally without CI environment variables:
+
+```sh
+python3 windows/scripts/prepare-update.py --tools /path/to/Sparkle/bin \
+  --metadata /path/to/fixture3-BUILD-INFO.json /path/to/fixture4-BUILD-INFO.json \
+  --output /path/to/new-public-fixture-feed --fixture-public
+```
+
+Fixture metadata must identify a clean current source, fixture builds and the exact public RFC key, with matching installer hashes. The older `--fixture-ci` flag is an alias for this public mode. Production mode accepts one immutable release and uses only the existing `com.jacknelson.velinshot.windows.ed25519` Keychain account. It provides no file-key option for production signing.
 
 ## How it maps to the Mac app
 
