@@ -96,7 +96,7 @@ internal static class UpdateChecks
         var verifier = new Ed25519Checker(SecurityMode.Strict, UpdateRelease.PublicFixtureKey);
         var payload = File.ReadAllBytes(Path.Combine(folder, "interop-payload.bin"));
         var signature = File.ReadAllText(Path.Combine(folder, "interop-payload.bin.signature")).Trim();
-        Check(verifier.VerifySignature(signature, payload) == ValidationResult.Valid, "official Sparkle Keychain signer is accepted by NetSparkle");
+        Check(verifier.VerifySignature(signature, payload) == ValidationResult.Valid, "official Sparkle public RFC file-mode signer is accepted by NetSparkle");
         payload[0] ^= 1;
         Check(new Ed25519Checker(SecurityMode.Strict, UpdateRelease.PublicFixtureKey).VerifySignature(signature, payload) != ValidationResult.Valid, "changed signed bytes fail verification");
         var settingsPath = Path.Combine(AppSettings.SupportDirectory, "isolated-preferences.json");

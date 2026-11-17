@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
-"""Prepare authenticated Windows feeds locally with official Sparkle Keychain tools.
+"""Prepare authenticated Windows feeds locally with official Sparkle signing tools.
 
 Production mode only looks up an existing Windows key. It never generates or exports one.
-The CI fixture uses public RFC8032 material in a disposable CI-only Keychain.
+The fixture uses only published RFC8032 test material in a temporary file, locally or in CI.
 """
 import argparse
 import base64
-from contextlib import contextmanager
 import hashlib
 import json
 from pathlib import Path
 import re
-import shlex
 import subprocess
 import tempfile
-import os
 import xml.etree.ElementTree as ET
 
 SPARKLE = 'http://www.andymatuschak.org/xml-namespaces/sparkle'
 VELINSHOT = 'https://github.com/Jacknelson6/Velinshot/updates'
 PUBLIC_FIXTURE_KEY = '11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo='
+PUBLIC_FIXTURE_SEED = bytes.fromhex('9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60')
 WINDOWS_ACCOUNT = 'com.jacknelson.velinshot.windows.ed25519'
 ET.register_namespace('sparkle', SPARKLE)
 ET.register_namespace('velinshot', VELINSHOT)
@@ -28,7 +26,7 @@ def command(args):
     result = subprocess.run([str(arg) for arg in args], check=True, capture_output=True, text=True, timeout=60)
     return result.stdout.strip()
 
-def sign(tools, account, path):
+def detached_signature(tools, path, signer_arguments):
     original = path.read_bytes()
     # Sparkle embeds its own signature into .xml feeds. NetSparkle needs a detached
     # signature over unchanged XML bytes, so use an identical non-XML temporary input.
@@ -37,13 +35,23 @@ def sign(tools, account, path):
         if path.suffix.lower() == '.xml':
             target = Path(folder) / 'detached-feed-bytes.bin'
             target.write_bytes(original)
-        output = command([tools / 'sign_update', '--account', account, target])
+        output = command([tools / 'sign_update', *signer_arguments, target])
         if target.read_bytes() != original or path.read_bytes() != original:
             raise ValueError('Signing changed the artifact bytes; refusing the signature.')
     match = re.search(r'sparkle:edSignature="([A-Za-z0-9+/=]+)"', output)
     if not match or len(base64.b64decode(match[1], validate=True)) != 64:
         raise ValueError('Official sign_update did not return a valid signature.')
     return match[1]
+
+def sign(tools, account, path):
+    return detached_signature(tools, path, ['--account', account])
+
+def sign_public_fixture(tools, path):
+    # The only file-mode key is this deliberately public RFC8032 vector. There is no private-key input option.
+    with tempfile.TemporaryDirectory(prefix='velinshot-public-rfc-fixture-') as folder:
+        seed = Path(folder) / 'PUBLIC-NONSECRET-RFC8032-SEED.txt'
+        seed.write_text(base64.b64encode(PUBLIC_FIXTURE_SEED).decode('ascii'))
+        return detached_signature(tools, path, ['--ed-key-file', seed])
 
 def feed_filename(runtime, fixture=False, older=False):
     if fixture: return 'old-appcast.xml' if older else 'appcast.xml'
@@ -88,57 +96,34 @@ def feed(metadata, installer, signature, fixture, **overrides):
     ET.indent(root)
     return ET.tostring(root, encoding='utf-8', xml_declaration=True) + b'\n'
 
-@contextmanager
-def fixture_keychain(tools):
-    if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_OS') != 'macOS':
-        raise ValueError('The public-key fixture may only provision a disposable Keychain on an ephemeral macOS CI runner.')
-    previous = command(['security', 'default-keychain', '-d', 'user']).strip('"')
-    listed = shlex.split(command(['security', 'list-keychains', '-d', 'user']))
-    account = WINDOWS_ACCOUNT + '.rfc8032.fixture'
-    with tempfile.TemporaryDirectory(prefix='velinshot-public-rfc-fixture-') as folder:
-        keychain = Path(folder) / 'fixture.keychain-db'
-        # This is an intentionally public test password and RFC8032 seed, never a release credential.
-        password = 'public-RFC8032-test-fixture-only'
-        command(['security', 'create-keychain', '-p', password, keychain])
-        try:
-            command(['security', 'unlock-keychain', '-p', password, keychain])
-            command(['security', 'list-keychains', '-d', 'user', '-s', keychain])
-            command(['security', 'default-keychain', '-d', 'user', '-s', keychain])
-            seed = bytes.fromhex('9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60')
-            seed_path = Path(folder) / 'PUBLIC-NONSECRET-RFC8032-SEED.txt'
-            seed_path.write_text(base64.b64encode(seed).decode())
-            command([tools / 'generate_keys', '--account', account, '-f', seed_path])
-            if command([tools / 'generate_keys', '--account', account, '-p']) != PUBLIC_FIXTURE_KEY:
-                raise ValueError('Official Keychain import did not yield the RFC8032 public key.')
-            yield account
-        finally:
-            command(['security', 'default-keychain', '-d', 'user', '-s', previous])
-            command(['security', 'list-keychains', '-d', 'user', '-s', *listed])
-            command(['security', 'delete-keychain', keychain])
-
-def prepare(args, account):
+def prepare(args):
+    releases = [read_release(path, args.fixture_ci) for path in args.metadata]
+    if args.fixture_ci:
+        key = PUBLIC_FIXTURE_KEY
+        signer = lambda path: sign_public_fixture(args.tools, path)
+    else:
+        key = command([args.tools / 'generate_keys', '--account', WINDOWS_ACCOUNT, '-p'])
+        signer = lambda path: sign(args.tools, WINDOWS_ACCOUNT, path)
     args.output.mkdir(parents=True, exist_ok=False)
-    for metadata_path in args.metadata:
-        metadata, installer = read_release(metadata_path, args.fixture_ci)
-        key = command([args.tools / 'generate_keys', '--account', account, '-p'])
+    for metadata, installer in releases:
         if key != metadata['updatePublicKey']:
             raise ValueError('The existing Keychain key does not match the embedded Windows public key.')
-        signature = sign(args.tools, account, installer)
-        older = metadata['build'] < max(json.loads(p.read_text(encoding='utf-8-sig'))['build'] for p in args.metadata)
+        signature = signer(installer)
+        older = metadata['build'] < max(release['build'] for release, _ in releases)
         target_name = feed_filename(metadata['runtime'], args.fixture_ci, older)
         target = args.output / target_name
         target.write_bytes(feed(metadata, installer, signature, args.fixture_ci))
-        target.with_name(target.name + '.signature').write_text(sign(args.tools, account, target) + '\n')
+        target.with_name(target.name + '.signature').write_text(signer(target) + '\n')
         if args.fixture_ci and target_name == 'appcast.xml':
             for name, overrides in [('wrong-arch.xml', {f'{{{VELINSHOT}}}runtime': 'win-arm64'}),
                                      ('future-os.xml', {f'{{{VELINSHOT}}}minimumWindowsBuild': '2147483647'})]:
                 altered = args.output / name
                 altered.write_bytes(feed(metadata, installer, signature, True, **overrides))
-                altered.with_name(name + '.signature').write_text(sign(args.tools, account, altered) + '\n')
+                altered.with_name(name + '.signature').write_text(signer(altered) + '\n')
     if args.fixture_ci:
         payload = args.output / 'interop-payload.bin'
-        payload.write_bytes(b'Velinshot Windows: official Sparkle Keychain signer interoperability fixture.\n')
-        (args.output / 'interop-payload.bin.signature').write_text(sign(args.tools, account, payload) + '\n')
+        payload.write_bytes(b'Velinshot Windows: official Sparkle public RFC file-mode signing fixture.\n')
+        (args.output / 'interop-payload.bin.signature').write_text(signer(payload) + '\n')
     print('Prepared authenticated Windows feed files. No release was published.')
 
 if __name__ == '__main__':
@@ -146,7 +131,7 @@ if __name__ == '__main__':
     parser.add_argument('--tools', type=Path, help='Official pinned Sparkle bin directory')
     parser.add_argument('--metadata', type=Path, nargs='+')
     parser.add_argument('--output', type=Path)
-    parser.add_argument('--fixture-ci', action='store_true')
+    parser.add_argument('--fixture-public', '--fixture-ci', dest='fixture_ci', action='store_true', help='Sign only public RFC8032 fixtures using file mode; also runs locally without CI environment variables.')
     parser.add_argument('--self-check', action='store_true')
     args = parser.parse_args()
     if args.self_check:
@@ -161,8 +146,6 @@ if __name__ == '__main__':
         raise SystemExit(0)
     if not args.tools or not args.metadata or not args.output:
         parser.error('--tools, --metadata and --output are required for signing')
-    if args.fixture_ci:
-        with fixture_keychain(args.tools) as account: prepare(args, account)
-    else:
-        if len(args.metadata) != 1: raise SystemExit('Production mode accepts exactly one immutable installer.')
-        prepare(args, WINDOWS_ACCOUNT)
+    if not args.fixture_ci and len(args.metadata) != 1:
+        raise SystemExit('Production mode accepts exactly one immutable installer.')
+    prepare(args)
