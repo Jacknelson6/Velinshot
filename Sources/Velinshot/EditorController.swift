@@ -31,6 +31,10 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private let fieldUndo = UndoManager()
     private var textEditingActive = false
     private var toolButtons: [EditorTool: NSButton] = [:]
+    private weak var moreToolsButton:StudioButton?
+    private weak var moreActionsButton:StudioButton?
+    private weak var advancedFrameSection:NSView?
+    private weak var advancedFrameButton:StudioButton?
     private var sliders: [String: NSSlider] = [:]
     private var valueLabels: [String: NSTextField] = [:]
     private var backgroundPicker = NSPopUpButton()
@@ -40,7 +44,9 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private var inspectorPages:[NSView] = []
     private var inspectorTabs:NSSegmentedControl?
     private let inspectorHeading = Brand.label("Composition",size:15,weight:.semibold)
-    private let markupDescription = Brand.label("Arrow",size:12,weight:.medium)
+    private let markupDescription = Brand.label("Arrow",size:14,weight:.semibold)
+    private let markupGuidance = NSTextField(wrappingLabelWithString:"")
+    private weak var annotationColorRow:NSView?
     private weak var inspectorScroll:NSScrollView?
     private weak var resetCropButton:NSButton?
     private var annotationWidth:NSSegmentedControl?
@@ -61,7 +67,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     private var sharePicker:NSSharingServicePicker?
     private var statusLabel = Brand.label("",size:11)
     private var dimensionsLabel = Brand.label("",size:11)
-    private var ocrButton: NSButton!
+    private var recognizingText = false
     private var presets: [StylePreset] = []
     private let presetStore:PresetStore
     private let preferences:AppSettings
@@ -158,12 +164,12 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         let header = StudioSurface();let content = NSView();let footer = StudioSurface()
         for view in [header,content,footer] { root.addSubview(view);view.translatesAutoresizingMaskIntoConstraints = false }
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo:root.topAnchor),header.leadingAnchor.constraint(equalTo:root.leadingAnchor),header.trailingAnchor.constraint(equalTo:root.trailingAnchor),header.heightAnchor.constraint(equalToConstant:56),
+            header.topAnchor.constraint(equalTo:root.topAnchor),header.leadingAnchor.constraint(equalTo:root.leadingAnchor),header.trailingAnchor.constraint(equalTo:root.trailingAnchor),header.heightAnchor.constraint(equalToConstant:60),
             content.topAnchor.constraint(equalTo:header.bottomAnchor),content.leadingAnchor.constraint(equalTo:root.leadingAnchor),content.trailingAnchor.constraint(equalTo:root.trailingAnchor),
-            footer.topAnchor.constraint(equalTo:content.bottomAnchor),footer.bottomAnchor.constraint(equalTo:root.bottomAnchor),footer.leadingAnchor.constraint(equalTo:root.leadingAnchor),footer.trailingAnchor.constraint(equalTo:root.trailingAnchor),footer.heightAnchor.constraint(equalToConstant:58)
+            footer.topAnchor.constraint(equalTo:content.bottomAnchor),footer.bottomAnchor.constraint(equalTo:root.bottomAnchor),footer.leadingAnchor.constraint(equalTo:root.leadingAnchor),footer.trailingAnchor.constraint(equalTo:root.trailingAnchor),footer.heightAnchor.constraint(equalToConstant:64)
         ])
         let title = Brand.label("Velinshot",size:13,weight:.semibold)
-        let documentTitle = Brand.label(window?.title ?? "Screenshot",size:10.5)
+        let documentTitle = Brand.label(window?.title ?? "Screenshot",size:11)
         documentTitle.textColor = .secondaryLabelColor;documentTitle.lineBreakMode = .byTruncatingMiddle
         documentTitle.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
         let titleGroup = NSStackView(views:[title,documentTitle]);titleGroup.orientation = .vertical;titleGroup.alignment = .leading;titleGroup.spacing = 1
@@ -171,57 +177,97 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         icon.translatesAutoresizingMaskIntoConstraints = false;icon.widthAnchor.constraint(equalToConstant:27).isActive = true;icon.heightAnchor.constraint(equalToConstant:27).isActive = true
         let undo = StudioButton(symbol:"arrow.uturn.backward") { [weak self] in self?.undoEdit() };undo.toolTip = "Undo (⌘Z)";undoButton = undo
         let redo = StudioButton(symbol:"arrow.uturn.forward") { [weak self] in self?.redoEdit() };redo.toolTip = "Redo (⇧⌘Z)";redoButton = redo
-        let fit = StudioButton("Fit",symbol:"arrow.up.left.and.arrow.down.right") { [weak self] in self?.canvas.fit() };fit.toolTip = "Fit to preview (⌘0)"
-        ocrButton = StudioButton("Text",symbol:"text.viewfinder") { [weak self] in self?.recognizeText() };ocrButton.toolTip = "Select and copy image text"
         let capture = StudioButton("Capture",symbol:"viewfinder") { [weak self] in self?.onCapture?() };capture.toolTip = "New capture"
-        let more = StudioButton(symbol:"ellipsis") {};more.actionHandler = { [weak self,weak more] in if let more { self?.showMore(more) } };more.toolTip = "Open, history and settings"
+        let more = StudioButton("More",symbol:"ellipsis") {};more.actionHandler = { [weak self,weak more] in if let more { self?.showMore(more) } };more.toolTip = "Fit, copy image text, share, open, history and settings";more.setAccessibilityLabel("More actions");moreActionsButton = more
         let spacer = NSView();spacer.setContentHuggingPriority(.defaultLow,for:.horizontal)
-        let headerStack = NSStackView(views:[icon,titleGroup,spacer,undo,redo,fit,ocrButton,capture,more]);headerStack.spacing = 7;headerStack.alignment = .centerY
+        let actions = NSStackView(views:[capture,undo,redo,more]);actions.spacing = 6;actions.identifier = .init("editor.header.actions")
+        let headerStack = NSStackView(views:[icon,titleGroup,spacer,actions]);headerStack.spacing = 10;headerStack.alignment = .centerY
         header.addSubview(headerStack);headerStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([headerStack.leadingAnchor.constraint(equalTo:header.leadingAnchor,constant:80),headerStack.trailingAnchor.constraint(equalTo:header.trailingAnchor,constant:-14),headerStack.centerYAnchor.constraint(equalTo:header.centerYAnchor)])
-        for button in [undo,redo,more] { button.widthAnchor.constraint(equalToConstant:34).isActive = true;button.setAccessibilityLabel(button.toolTip) }
-        capture.setAccessibilityLabel("New capture");fit.setAccessibilityLabel("Fit image to preview");ocrButton.setAccessibilityLabel("Select and copy image text")
+        for button in [undo,redo] { button.widthAnchor.constraint(equalToConstant:StudioMetrics.controlHeight).isActive = true;button.setAccessibilityLabel(button.toolTip) }
+        capture.setAccessibilityLabel("New capture")
 
         let rail = StudioSurface()
         let inspector = buildInspector()
         for view in [rail,canvas,inspector] { content.addSubview(view);view.translatesAutoresizingMaskIntoConstraints = false }
         NSLayoutConstraint.activate([
-            rail.leadingAnchor.constraint(equalTo:content.leadingAnchor),rail.topAnchor.constraint(equalTo:content.topAnchor),rail.bottomAnchor.constraint(equalTo:content.bottomAnchor),rail.widthAnchor.constraint(equalToConstant:58),
+            rail.leadingAnchor.constraint(equalTo:content.leadingAnchor),rail.topAnchor.constraint(equalTo:content.topAnchor),rail.bottomAnchor.constraint(equalTo:content.bottomAnchor),rail.widthAnchor.constraint(equalToConstant:64),
             inspector.trailingAnchor.constraint(equalTo:content.trailingAnchor),inspector.topAnchor.constraint(equalTo:content.topAnchor),inspector.bottomAnchor.constraint(equalTo:content.bottomAnchor),inspector.widthAnchor.constraint(equalToConstant:250),
             canvas.leadingAnchor.constraint(equalTo:rail.trailingAnchor),canvas.trailingAnchor.constraint(equalTo:inspector.leadingAnchor),canvas.topAnchor.constraint(equalTo:content.topAnchor),canvas.bottomAnchor.constraint(equalTo:content.bottomAnchor)
         ])
-        let tools = NSStackView();tools.orientation = .vertical;tools.spacing = 3
+        let tools = NSStackView();tools.orientation = .vertical;tools.spacing = 4;tools.identifier = .init("editor.tools")
         rail.addSubview(tools);tools.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([tools.topAnchor.constraint(equalTo:rail.topAnchor,constant:12),tools.centerXAnchor.constraint(equalTo:rail.centerXAnchor)])
-        let order:[EditorTool] = [.select,.pen,.arrow,.line,.rectangle,.ellipse,.text,.highlighter,.number,.blur,.redact,.crop]
+        let order:[EditorTool] = [.select,.arrow,.rectangle,.text,.highlighter,.redact,.crop]
         for tool in order {
             let button = StudioButton(symbol:tool.symbol,kind:.tool) { [weak self] in self?.setTool(tool) }
             button.toolTip = tool.title;button.setAccessibilityLabel(tool.title);button.setButtonType(.pushOnPushOff)
-            button.widthAnchor.constraint(equalToConstant:38).isActive = true
+            button.widthAnchor.constraint(equalToConstant:StudioMetrics.toolTarget).isActive = true
             toolButtons[tool] = button;tools.addArrangedSubview(button)
         }
+        let moreTools = StudioButton(symbol:"ellipsis",kind:.tool) {}
+        moreTools.actionHandler = { [weak self,weak moreTools] in if let moreTools { self?.showMoreTools(moreTools) } }
+        moreTools.setButtonType(.pushOnPushOff);moreTools.showsMenuIndicator = true
+        moreTools.widthAnchor.constraint(equalToConstant:StudioMetrics.toolTarget).isActive = true
+        moreTools.identifier = .init("editor.more-tools");moreToolsButton = moreTools;tools.addArrangedSubview(moreTools)
         setTool(.select)
         let copy = StudioButton("Copy",symbol:"doc.on.doc",kind:.primary,shortcut:"C") { [weak self] in self?.copyImage() };copy.setAccessibilityLabel("Copy screenshot");copy.toolTip = "Copy and close (C or ⌘C)"
         let save = StudioButton("Save",symbol:"square.and.arrow.down",kind:.secondary,shortcut:"S") { [weak self] in self?.saveImage() };save.setAccessibilityLabel("Save screenshot");save.toolTip = "Choose where to save (S or ⌘S)"
         let drag = DragExportButton();drag.imageProvider = { [weak self] in
             guard let self else { throw VelinshotError.renderingFailed };return try self.renderedImage()
         };drag.onError = { [weak self] in self?.showError($0) };drag.controlSize = .small
-        let share = StudioButton(symbol:"square.and.arrow.up",kind:.footer) {}
-        share.actionHandler = { [weak self,weak share] in if let share { self?.shareScreenshot(share) } };share.toolTip = "Share finished screenshot";share.setAccessibilityLabel("Share screenshot");share.widthAnchor.constraint(equalToConstant:36).isActive = true
-        dimensionsLabel.font = .monospacedDigitSystemFont(ofSize:11,weight:.medium);dimensionsLabel.textColor = .labelColor
+        dimensionsLabel.font = .monospacedDigitSystemFont(ofSize:12,weight:.medium);dimensionsLabel.textColor = .labelColor
+        statusLabel.font = .systemFont(ofSize:12)
         statusLabel.textColor = .secondaryLabelColor;statusLabel.lineBreakMode = .byTruncatingTail;statusLabel.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
         let information = NSStackView(views:[dimensionsLabel,statusLabel]);information.orientation = .vertical;information.alignment = .leading;information.spacing = 3
+        information.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
+        let utility = NSStackView(views:[information,drag]);utility.spacing = 20;utility.alignment = .centerY;utility.identifier = .init("editor.footer.utility")
+        let exports = NSStackView(views:[save,copy]);exports.spacing = 10;exports.identifier = .init("editor.export.actions")
         let footerSpacer = NSView();footerSpacer.setContentHuggingPriority(.defaultLow,for:.horizontal)
-        let bottom = NSStackView(views:[information,footerSpacer,drag,share,save,copy]);bottom.spacing = 10;bottom.alignment = .centerY
+        let bottom = NSStackView(views:[utility,footerSpacer,exports]);bottom.spacing = 16;bottom.alignment = .centerY
         footer.addSubview(bottom);bottom.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([bottom.leadingAnchor.constraint(equalTo:footer.leadingAnchor,constant:18),bottom.trailingAnchor.constraint(equalTo:footer.trailingAnchor,constant:-16),bottom.centerYAnchor.constraint(equalTo:footer.centerYAnchor),copy.widthAnchor.constraint(equalToConstant:110),save.widthAnchor.constraint(equalToConstant:110)])
+        NSLayoutConstraint.activate([bottom.leadingAnchor.constraint(equalTo:footer.leadingAnchor,constant:18),bottom.trailingAnchor.constraint(equalTo:footer.trailingAnchor,constant:-16),bottom.centerYAnchor.constraint(equalTo:footer.centerYAnchor),copy.widthAnchor.constraint(equalToConstant:120),save.widthAnchor.constraint(equalToConstant:120)])
     }
     private func showMore(_ sender:NSView) {
-        let menu = NSMenu()
+        makeMoreMenu().popUp(positioning:nil,at:CGPoint(x:sender.bounds.maxX,y:sender.bounds.minY-5),in:sender)
+    }
+    func makeMoreMenu() -> NSMenu {
+        let menu = NSMenu(title:"More actions");menu.autoenablesItems = false
+        let fit = NSMenuItem(title:"Fit to Preview",action:#selector(requestFit),keyEquivalent:"0");fit.target = self;fit.image = Brand.symbol("arrow.up.left.and.arrow.down.right");menu.addItem(fit)
+        let text = NSMenuItem(title:"Copy Image Text…",action:#selector(requestImageText),keyEquivalent:"");text.target = self;text.image = Brand.symbol("text.viewfinder");text.isEnabled = !recognizingText;menu.addItem(text)
+        let share = NSMenuItem(title:"Share Screenshot…",action:#selector(requestShare),keyEquivalent:"");share.target = self;share.image = Brand.symbol("square.and.arrow.up");menu.addItem(share)
+        menu.addItem(.separator())
         let entries:[(String,Selector,String)] = [("Open Image…",#selector(requestOpen),"o"),("Open from Clipboard",#selector(requestPaste),"v"),("Screenshot History…",#selector(requestHistory),""),("Settings…",#selector(requestSettings),",")]
         for (title,action,key) in entries { let item = NSMenuItem(title:title,action:action,keyEquivalent:key);item.target = self;menu.addItem(item) }
-        menu.popUp(positioning:nil,at:CGPoint(x:sender.bounds.maxX,y:sender.bounds.minY-5),in:sender)
+        return menu
     }
+    private func showMoreTools(_ sender:NSView) {
+        makeMoreToolsMenu().popUp(positioning:nil,at:CGPoint(x:sender.bounds.maxX+6,y:sender.bounds.maxY),in:sender)
+        updateMoreToolsButton()
+    }
+    func makeMoreToolsMenu() -> NSMenu {
+        let menu = NSMenu(title:"More tools");menu.autoenablesItems = false
+        for tool in [EditorTool.pen,.line,.ellipse,.number,.blur] {
+            let item = NSMenuItem(title:tool.title,action:#selector(chooseMoreTool),keyEquivalent:"")
+            item.target = self;item.representedObject = tool.rawValue;item.image = Brand.symbol(tool.symbol)
+            item.state = canvas.tool == tool ? .on : .off;menu.addItem(item)
+        }
+        return menu
+    }
+    @objc private func chooseMoreTool(_ sender:NSMenuItem) {
+        guard let raw = sender.representedObject as? String,let tool = EditorTool(rawValue:raw) else { return }
+        setTool(tool)
+    }
+    private func updateMoreToolsButton() {
+        let selected = toolButtons[canvas.tool] == nil
+        moreToolsButton?.state = selected ? .on : .off
+        moreToolsButton?.toolTip = selected ? "More tools · \(canvas.tool.title) selected" : "More tools · Draw, Line, Ellipse, Number and Blur"
+        moreToolsButton?.setAccessibilityLabel("More tools")
+        moreToolsButton?.setAccessibilityValue(selected ? "\(canvas.tool.title) selected" : "No secondary tool selected")
+    }
+    @objc private func requestFit() { canvas.fit();window?.makeFirstResponder(canvas) }
+    @objc private func requestImageText() { recognizeText() }
+    @objc private func requestShare() { if let sender = moreActionsButton { shareScreenshot(sender) } }
     @objc private func requestOpen() { onOpen?() }
     @objc private func requestPaste() { onPaste?() }
     @objc private func requestHistory() { onHistory?() }
@@ -245,17 +291,25 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         func group() -> NSStackView { let view = NSStackView();view.orientation = .vertical;view.alignment = .leading;view.spacing = 16;view.detachesHiddenViews = true;add(view,to:stack);return view }
         let frame = group(),backdrop = group(),output = group();frame.spacing = 10;inspectorPages = [frame,backdrop,output];backdrop.isHidden = true;output.isHidden = true
         add(sliderRow("Padding",key:"padding",min:0,max:240),to:frame)
-        add(sliderRow("Inset",key:"inset",min:0,max:160),to:frame)
-        insetColor.target = self;insetColor.action = #selector(insetColorChanged);insetColor.setAccessibilityLabel("Inset fill color")
-        autoInsetCheck = CheckButton(title:"Auto",value:canvas.state.style.autoInsetColor) { [weak self] enabled in self?.setAutomaticInset(enabled) }
-        autoInsetCheck.font = .systemFont(ofSize:11,weight:.medium);autoInsetCheck.controlSize = .small;autoInsetCheck.setAccessibilityLabel("Automatic inset fill")
-        add(colorRow("Inset fill",well:insetColor,mode:autoInsetCheck),to:frame)
         add(sliderRow("Corners",key:"cornerRadius",min:0,max:100),to:frame)
         add(sliderRow("Shadow",key:"shadow",min:0,max:100),to:frame)
-        add(sliderRow("Border",key:"borderWidth",min:0,max:12),to:frame)
-        add(separator(),to:frame)
         balanceCheck = CheckButton(title:"Auto balance",value:canvas.state.style.autoBalance) { [weak self] enabled in self?.setAutomaticBalance(enabled) };add(balanceCheck,to:frame)
-        let reset = StudioButton("Reset crop",symbol:"arrow.uturn.backward") { [weak self] in self?.change { $0.crop = nil;$0.style.autoBalance = false };self?.canvas.fit() };resetCropButton = reset;add(reset,to:frame)
+        let reset = StudioButton("Reset crop",symbol:"arrow.uturn.backward") { [weak self] in self?.change { $0.crop = nil;$0.style.autoBalance = false };self?.canvas.fit() };reset.alignment = .left;resetCropButton = reset;add(reset,to:frame)
+        let advancedButton = StudioButton("Advanced frame",symbol:"chevron.right") {}
+        advancedButton.alignment = .left;advancedButton.symbolSize = 12
+        advancedButton.actionHandler = { [weak self] in
+            guard let self else { return };self.setAdvancedFrameExpanded(self.advancedFrameSection?.isHidden ?? true)
+        }
+        advancedButton.identifier = .init("editor.advanced-frame");advancedButton.setAccessibilityRole(.disclosureTriangle);advancedFrameButton = advancedButton;add(advancedButton,to:frame)
+        let advanced = NSStackView();advanced.orientation = .vertical;advanced.alignment = .leading;advanced.spacing = 10
+        advanced.identifier = .init("editor.advanced-frame-content");advancedFrameSection = advanced;add(advanced,to:frame)
+        add(sliderRow("Inset",key:"inset",min:0,max:160),to:advanced)
+        insetColor.target = self;insetColor.action = #selector(insetColorChanged);insetColor.setAccessibilityLabel("Inset fill color")
+        autoInsetCheck = CheckButton(title:"Auto",value:canvas.state.style.autoInsetColor) { [weak self] enabled in self?.setAutomaticInset(enabled) }
+        autoInsetCheck.font = .systemFont(ofSize:13);autoInsetCheck.controlSize = .regular;autoInsetCheck.setAccessibilityLabel("Automatic inset fill")
+        add(insetFillRow(),to:advanced)
+        add(sliderRow("Border",key:"borderWidth",min:0,max:12),to:advanced)
+        setAdvancedFrameExpanded(false)
 
         backgroundPicker.addItems(withTitles:["Gradient","Solid color","Image","Transparent"]);backgroundPicker.target = self;backgroundPicker.action = #selector(backgroundChanged);backgroundPicker.setAccessibilityLabel("Background type");add(backgroundPicker,to:backdrop)
         let swatches = NSStackView();swatches.spacing = 9
@@ -291,8 +345,11 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
 
         let annotation = NSStackView();annotation.orientation = .vertical;annotation.alignment = .leading;annotation.spacing = 18;annotation.detachesHiddenViews = true
         add(markupDescription,to:annotation)
-        annotationColorWell.color = canvas.annotationColor.nsColor;annotationColorWell.target = self;annotationColorWell.action = #selector(annotationColorChanged);annotationColorWell.setAccessibilityLabel("Annotation color");add(colorRow("Color",well:annotationColorWell),to:annotation)
+        markupGuidance.font = .systemFont(ofSize:12);markupGuidance.textColor = .secondaryLabelColor;markupGuidance.identifier = .init("editor.markup.guidance");add(markupGuidance,to:annotation)
+        annotationColorWell.color = canvas.annotationColor.nsColor;annotationColorWell.target = self;annotationColorWell.action = #selector(annotationColorChanged);annotationColorWell.setAccessibilityLabel("Annotation color")
+        let color = colorRow("Color",well:annotationColorWell);color.identifier = .init("editor.annotation.color");annotationColorRow = color;add(color,to:annotation)
         let width = StudioSegments(labels:["Thin","Medium","Bold"],trackingMode:.selectOne,target:self,action:#selector(widthChanged));width.selectedSegment = 1;width.segmentDistribution = .fillEqually;width.setAccessibilityLabel("Annotation stroke width");annotationWidth = width;add(width,to:annotation)
+        width.identifier = .init("editor.annotation.width")
         let fonts = NSPopUpButton();fonts.addItems(withTitles:["Text 24 px","Text 36 px","Text 48 px","Text 72 px","Text 96 px"]);fonts.selectItem(at:1);fonts.target = self;fonts.action = #selector(fontChanged);fonts.setAccessibilityLabel("Annotation text size");annotationFont = fonts;add(fonts,to:annotation)
         add(StudioButton("Back to composition",symbol:"arrow.left") { [weak self] in self?.setTool(.select) },to:annotation)
         add(annotation,to:stack);stack.removeArrangedSubview(annotation);stack.insertArrangedSubview(annotation,at:0)
@@ -305,6 +362,14 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         let row = NSStackView(views:[Brand.label(title),NSView()]);if let mode { row.addArrangedSubview(mode) };row.addArrangedSubview(well)
         row.spacing = mode == nil ? 8 : 4;row.alignment = .centerY;return row
     }
+    private func insetFillRow() -> NSView {
+        insetColor.prominentSample = true;insetColor.controlSize = .regular;insetColor.colorWellStyle = .minimal
+        insetColor.widthAnchor.constraint(equalToConstant:140).isActive = true;insetColor.heightAnchor.constraint(equalToConstant:40).isActive = true
+        let controls = NSStackView(views:[autoInsetCheck,NSView(),insetColor]);controls.spacing = 8;controls.alignment = .centerY
+        let group = NSStackView(views:[Brand.label("Inset fill",size:13),controls]);group.orientation = .vertical;group.alignment = .leading;group.spacing = 5
+        controls.widthAnchor.constraint(equalTo:group.widthAnchor).isActive = true
+        return group
+    }
     @objc private func inspectorTabChanged(_ tabs:NSSegmentedControl) {
         window?.makeFirstResponder(canvas)
         for (index,page) in inspectorPages.enumerated() { page.isHidden = index != tabs.selectedSegment }
@@ -315,13 +380,23 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         setTool(.select)
         tabs.selectedSegment = index;inspectorTabChanged(tabs)
     }
+    func setAdvancedFrameExpanded(_ expanded:Bool) {
+        if !expanded,let section = advancedFrameSection,let responder = window?.firstResponder as? NSView,responder.isDescendant(of:section) {
+            if window?.makeFirstResponder(advancedFrameButton) != true { window?.makeFirstResponder(canvas) }
+        }
+        advancedFrameSection?.isHidden = !expanded
+        advancedFrameButton?.setAccessibilityExpanded(expanded)
+        advancedFrameButton?.image = Brand.symbol(expanded ? "chevron.down" : "chevron.right",size:12)
+        advancedFrameButton?.setAccessibilityValue(expanded ? "Expanded" : "Collapsed")
+        advancedFrameButton?.toolTip = expanded ? "Hide inset and border options" : "Show inset and border options"
+    }
     var frameControlsFit:Bool {
         guard let button = resetCropButton,let clip = inspectorScroll?.contentView,!button.isHiddenOrHasHiddenAncestor else { return false }
         return clip.bounds.contains(clip.convert(button.bounds,from:button))
     }
     private func separator() -> NSView { let space = NSView();space.heightAnchor.constraint(equalToConstant:4).isActive = true;return space }
     private func sliderRow(_ title:String,key:String,min:Double,max:Double) -> NSView {
-        let label = Brand.label(title)
+        let label = Brand.label(title,size:13)
         let value = Brand.label("",size:11);value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor
         let spacer = NSView();let top = NSStackView(views:[label,spacer,value]);top.distribution = .fill;top.alignment = .centerY
         let slider = GestureSlider(value:0,minValue:min,maxValue:max,target:self,action:#selector(sliderChanged));slider.identifier = .init(key);slider.isContinuous = true;slider.setAccessibilityLabel(title)
@@ -343,6 +418,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
             button.state = kind == tool ? .on : .off
             button.needsDisplay = true
         }
+        updateMoreToolsButton()
         window?.makeFirstResponder(canvas)
         setStatus(tool.title)
     }
@@ -354,8 +430,15 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         for (pageIndex,page) in inspectorPages.enumerated() { page.isHidden = active || pageIndex != index }
         let kind = annotation?.kind ?? canvas.tool.annotationKind
         markupDescription.stringValue = kind?.rawValue.capitalized ?? canvas.tool.rawValue.capitalized
+        let blur = kind == .blur
+        annotationColorRow?.isHidden = blur
+        markupGuidance.isHidden = !blur
+        markupGuidance.stringValue = annotation == nil ? "Drag over the image to blur an area." : "Adjust strength below, or move and resize the selected area."
         annotationFont?.isHidden = kind != .text && kind != .number
         annotationWidth?.isHidden = kind == .text || kind == .number || kind == .redact
+        let widthLabels = blur ? ["Soft","Medium","Strong"] : ["Thin","Medium","Bold"]
+        for segmentIndex in widthLabels.indices { annotationWidth?.setLabel(widthLabels[segmentIndex],forSegment:segmentIndex) }
+        annotationWidth?.setAccessibilityLabel(blur ? "Blur strength" : "Annotation stroke width")
     }
     private func commit(before:EditState,after:EditState) {
         guard before != after else { return }
@@ -395,6 +478,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
     func redoEdit() { canvas.finishText();if !canvas.cancelPointerGesture() { editorUndo.redo() };syncInspector() }
     private func syncInspector() {
         let style = canvas.state.style
+        resetCropButton?.isEnabled = canvas.state.crop != nil
         undoButton?.isEnabled = editorUndo.canUndo;redoButton?.isEnabled = editorUndo.canRedo
         let values = ["padding":style.padding,"inset":style.inset,"cornerRadius":style.cornerRadius,"shadow":style.shadow,"borderWidth":style.borderWidth,"gradientAngle":style.gradientAngle]
         for (key,value) in values { sliders[key]?.doubleValue = value;valueLabels[key]?.stringValue = "\(Int(value))\(key == "gradientAngle" ? "°" : " px")" }
@@ -724,13 +808,14 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextFieldD
         } catch { historyFailure = error.localizedDescription;setStatus("History could not be saved: \(error.localizedDescription)",error:true);return false }
     }
     func recognizeText() {
+        guard !recognizingText else { return }
         do {
             let image = try renderedImage()
-            ocrButton.isEnabled = false;setStatus("Recognizing text on this Mac…")
+            recognizingText = true;setStatus("Recognizing text on this Mac…")
             DispatchQueue.global(qos:.userInitiated).async { [weak self] in
                 let result = Result { try TextRecognizer.recognize(image:image) }
                 DispatchQueue.main.async { [weak self] in
-                    guard let self else { return };self.ocrButton.isEnabled = true
+                    guard let self else { return };self.recognizingText = false
                     switch result {
                     case .success(let lines):self.showRecognizedText(lines.map(\.text).joined(separator:"\n"));self.setStatus("\(lines.count) text regions recognized")
                     case .failure(let error):self.showError(error)

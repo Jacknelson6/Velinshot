@@ -26,6 +26,8 @@ jobs:
         run: swift test -j 2
       - name: Build native app
         run: bash scripts/build-app.sh
+      - name: Run native interaction checks
+        run: build/Velinshot.app/Contents/MacOS/Velinshot --smoke-check .build/integration-checks
       - name: Validate bundle
         run: python3 scripts/verify-bundle.py build/Velinshot.app
       - name: Package native build

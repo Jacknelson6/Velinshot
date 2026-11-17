@@ -205,6 +205,8 @@ enum PlatformChecks {
         count += try ImageWorkChecks.run()
         count += try CanvasMarginChecks.run(directory:directory)
         count += try InsetAutomaticChecks.run(directory:directory)
+        count += try CaptureChecks.run()
+        count += try EditorChromeChecks.run(directory:directory)
         print("\(count) platform integration checks passed in isolated settings and hidden native views.")
         return count
     }

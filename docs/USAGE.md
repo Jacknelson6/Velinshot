@@ -2,13 +2,19 @@
 
 ## Capture and import
 
-Press **⌘4** to capture and edit. Drag an area, use **Space** for window selection, or choose display capture from the File menu. **Escape** cancels. Set a different global shortcut in Settings if needed.
+Press **⌘4** to capture and edit. Each connected display gets an overlay. Move the pointer to the display you want, then drag an area; the first click starts selection even on a different monitor. You can drag across display boundaries. **Space** switches to window selection. **Escape** cancels. Set a different global shortcut in Settings if needed.
 
-Open an existing image through the File menu or toolbar, paste an image from the clipboard, or drop an image into the editor. The editor opens after capture or import.
+**Capture Display** in the File or menu-bar menu waits for you to click the display to capture, rather than choosing one immediately from the pointer's starting location. A visible outline identifies the current target. Changing the connected displays during capture cancels the selection so you can start again.
+
+Open an existing image through the File menu or the editor's **More** menu, paste an image from the clipboard, or drop an image into the editor. The editor opens after capture or import.
 
 ## Frame and annotate
 
 Use **Frame**, **Backdrop** and **Output** to adjust geometry, backgrounds and export size. Outer padding and inner inset are separate. Inset fill follows the visible image's dominant edge color by default. Choosing a color turns Auto off; use Auto to restore matching. Older saved presets and history retain their recorded colors.
+
+The larger tool rail keeps **Select**, **Arrow**, **Rectangle**, **Text**, **Highlight**, **Redact** and **Crop** visible. **More tools** contains Draw, Line, Ellipse, Number and Blur. A secondary tool stays indicated on that button while selected; every tool also keeps its letter shortcut.
+
+Frame shows Padding, Corners, Shadow and Auto balance first. Expand **Advanced frame** for Inset, Inset fill and Border. Reset crop remains visible. The header's **More** menu contains Fit to Preview, Copy Image Text, Share Screenshot, import, history and Settings actions. Copy and Save stay visible at the bottom.
 
 | Backdrop | Output |
 |---|---|
@@ -22,7 +28,7 @@ Double-click empty background in Select to copy and close. Text editing owns let
 
 **C** copies the finished image and closes the editor when that preference is enabled. **S** opens the native save picker so you can choose the destination, PNG/JPEG format and JPEG quality. The File menu also offers the original, unframed image.
 
-Drag export advertises a promised PNG file and PNG pasteboard data. Share opens the native macOS destination picker. Final Finder receipt and Share destination delivery remain [manual preview checks](QA.md#remaining-manual-checks).
+Drag export advertises a promised PNG file and PNG pasteboard data. **More → Share Screenshot** opens the native macOS destination picker. Final Finder receipt and Share destination delivery remain [manual preview checks](QA.md#remaining-manual-checks).
 
 ## Shortcuts
 
@@ -45,7 +51,7 @@ Drag export advertises a promised PNG file and PNG pasteboard data. Share opens 
 
 ## Capture access
 
-Allow Velinshot in **System Settings → Privacy & Security → Screen & System Audio Recording**. Settings has a shortcut to that pane. Relaunch if macOS asks. First-launch Gatekeeper approval is a [separate step](../README.md#download-and-open).
+Install into **Applications** and open that copy before allowing Velinshot in **System Settings → Privacy & Security → Screen & System Audio Recording**. Settings has a shortcut to that pane. Relaunch if macOS asks. First-launch Gatekeeper approval is a [separate step](../README.md#download-and-open).
 
 If access appears enabled but capture fails after replacing a locally built app, the permission may belong to an older signature. Use **Show This App in Finder** in Settings to identify the current copy, then refresh that app's Screen Recording entry. A rebuilt ad-hoc app can require consent again.
 

@@ -262,7 +262,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
     @objc func openDemo() { do { present(try DemoFixture.make(),state:DemoFixture.style(),title:"Studio notes · Demo") } catch { showError(error) } }
     @objc func about() {
-        NSApp.orderFrontStandardAboutPanel(options:[.applicationName:"Velinshot",.applicationVersion:"1.0.0",.version:"1",.credits:NSAttributedString(string:"Beautiful screenshots. Native speed. Free forever.\nBuilt with Swift and macOS. MIT licensed.\ngithub.com/Jacknelson6/Velinshot")])
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Development"
+        NSApp.orderFrontStandardAboutPanel(options:[.applicationName:"Velinshot",.applicationVersion:version,.version:build,.credits:NSAttributedString(string:"Beautiful screenshots. Native speed. Free forever.\nBuilt with Swift and macOS. MIT licensed.\ngithub.com/Jacknelson6/Velinshot")])
     }
     @objc func shortcutHelp() {
         let alert = NSAlert();alert.messageText = "A shorter way to share."
@@ -270,21 +272,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         alert.runModal()
     }
     @objc private func checkUpdates() {
-        let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-        guard let url = URL(string:"https://api.github.com/repos/Jacknelson6/Velinshot/releases/latest") else { return }
-        var request = URLRequest(url:url);request.timeoutInterval = 15;request.setValue("application/vnd.github+json",forHTTPHeaderField:"Accept")
-        URLSession.shared.dataTask(with:request) { data,response,error in
-            let payload = data.flatMap{try? JSONSerialization.jsonObject(with:$0) as? [String:Any]}
-            let latest = (payload?["tag_name"] as? String)?.trimmingCharacters(in:CharacterSet(charactersIn:"v"))
-            DispatchQueue.main.async {
-                let alert = NSAlert()
-                if let error { alert.messageText = "Could not check for updates";alert.informativeText = error.localizedDescription }
-                else if let latest,latest.compare(current,options:.numeric) == .orderedDescending { alert.messageText = "Velinshot \(latest) is available";alert.informativeText = "Download the new version from the GitHub repository. Your current version is \(current)." }
-                else if latest != nil { alert.messageText = "You’re up to date";alert.informativeText = "Velinshot \(current) is the latest published release." }
-                else { alert.messageText = "No published release was found";alert.informativeText = "Try again later or check the GitHub repository." }
-                alert.runModal()
-            }
-        }.resume()
+        guard let url = URL(string:"https://github.com/Jacknelson6/Velinshot/releases") else { return }
+        NSWorkspace.shared.open(url)
     }
     private func showCaptureError(_ error:Error) {
         let alert = NSAlert();alert.messageText = "Capture needs your attention";alert.informativeText = error.localizedDescription

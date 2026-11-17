@@ -91,10 +91,11 @@ enum CanvasMarginChecks {
         canvas.tool = .select;canvas.mouseDown(with:try mouse(.leftMouseDown,empty,clicks:2))
         try check(canvas.subviews.contains{$0 is NSTextField},"double-click edits mat text before considering background copy")
         canvas.finishText(cancel:true);try check(copies==1,"mat text editing never copies the image")
-        for (label,height) in [("Copy screenshot",36.0),("Save screenshot",36.0),("Share screenshot",36.0),("Drag finished screenshot",36.0),("Arrow (A)",32.0)] {
+        for (label,height) in [("Copy screenshot",StudioMetrics.controlHeight),("Save screenshot",StudioMetrics.controlHeight),("Drag finished screenshot",StudioMetrics.controlHeight),("Arrow (A)",StudioMetrics.toolTarget)] {
             guard let button = all(root).compactMap({$0 as? StudioButton}).first(where:{$0.accessibilityLabel()==label}) else { throw VelinshotError.invalidImage("Missing \(label)") }
             try check(abs(button.frame.height-height)<0.01,"\(label) uses its declared visible control height")
         }
+        try check(editor.makeMoreMenu().items.contains{$0.title == "Share Screenshot…" && $0.action == NSSelectorFromString("requestShare") && $0.target === editor},"Share retains its native action through the visible More menu")
         return count
     }
 }

@@ -1,5 +1,12 @@
 import AppKit
 
+enum StudioMetrics {
+    static let toolTarget:CGFloat = 44
+    static let controlHeight:CGFloat = 40
+    static let toolSymbol:CGFloat = 20
+    static let toolbarSymbol:CGFloat = 18
+}
+
 /// Static native surfaces redraw only when their appearance or content changes.
 enum StudioPalette {
     static let surface = NSColor(name:"Studio surface") { appearance in
@@ -38,6 +45,7 @@ class StudioButton:NSButton {
     var shortcut:String?
     var imageSpacing:CGFloat = 7
     var symbolSize:CGFloat?
+    var showsMenuIndicator = false
     var actionHandler:(()->Void)?
     private var hovered = false
     private var tracking:NSTrackingArea?
@@ -45,20 +53,20 @@ class StudioButton:NSButton {
         self.init(frame:.zero)
         self.title = title;self.kind = kind;self.shortcut = shortcut;self.actionHandler = action
         if !title.isEmpty { setAccessibilityLabel(title) }
-        if let symbol { image = Brand.symbol(symbol,size:kind == .tool ? 20 : 17) }
-        font = .systemFont(ofSize:12,weight:.medium)
+        if let symbol { image = Brand.symbol(symbol,size:kind == .tool ? StudioMetrics.toolSymbol : StudioMetrics.toolbarSymbol) }
+        font = .systemFont(ofSize:13,weight:.medium)
         isBordered = false;focusRingType = .exterior;setButtonType(.momentaryPushIn)
         target = self;self.action = #selector(invoke)
         translatesAutoresizingMaskIntoConstraints = false
         heightAnchor.constraint(equalToConstant:controlHeight).isActive = true
     }
-    private var controlHeight:CGFloat { kind == .primary || kind == .secondary || kind == .footer ? 36 : 32 }
+    private var controlHeight:CGFloat { kind == .tool ? StudioMetrics.toolTarget : StudioMetrics.controlHeight }
     override var alignmentRectInsets:NSEdgeInsets { NSEdgeInsets(top:0,left:0,bottom:0,right:0) }
     @objc private func invoke() { actionHandler?() }
     override var intrinsicContentSize:NSSize {
-        let text = (title as NSString).size(withAttributes:[.font:font ?? NSFont.systemFont(ofSize:12)])
-        let icon = symbolSize ?? (kind == .tool ? 20 : 17)
-        return NSSize(width:max(32,text.width+(image == nil ? 0 : icon+(title.isEmpty ? 0 : imageSpacing))+(shortcut == nil ? 0 : 29)+20),height:controlHeight)
+        let text = (title as NSString).size(withAttributes:[.font:font ?? NSFont.systemFont(ofSize:13)])
+        let icon = symbolSize ?? (kind == .tool ? StudioMetrics.toolSymbol : StudioMetrics.toolbarSymbol)
+        return NSSize(width:max(40,text.width+(image == nil ? 0 : icon+(title.isEmpty ? 0 : imageSpacing))+(shortcut == nil ? 0 : 29)+20),height:controlHeight)
     }
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -81,11 +89,11 @@ class StudioButton:NSButton {
             (selected ? StudioPalette.accent.withAlphaComponent(0.13) : NSColor.labelColor.withAlphaComponent(active ? 0.08 : 0.035)).setFill();shape.fill()
         }
         let alpha:CGFloat = isEnabled ? 1 : 0.35
-        let textFont = NSFont.systemFont(ofSize:12,weight:kind == .primary ? .semibold : .medium)
+        let textFont = NSFont.systemFont(ofSize:13,weight:kind == .primary ? .semibold : .medium)
         let textWidth = (title as NSString).size(withAttributes:[.font:textFont]).width
-        let iconBox:CGFloat = symbolSize ?? (kind == .tool ? 20 : 17)
-        let total = textWidth+(image == nil ? 0 : (title.isEmpty ? iconBox : iconBox+imageSpacing))+(shortcut == nil ? 0 : 29)
-        var x = (bounds.width-total)/2
+        let iconBox:CGFloat = symbolSize ?? (kind == .tool ? StudioMetrics.toolSymbol : StudioMetrics.toolbarSymbol)
+        let total = textWidth+(image == nil ? 0 : (title.isEmpty ? iconBox : iconBox+imageSpacing))+(shortcut == nil ? 0 : 29)+(showsMenuIndicator ? 13 : 0)
+        var x = alignment == .left ? 0 : (bounds.width-total)/2
         if let image {
             let tinted = image.withSymbolConfiguration(.init(paletteColors:[foreground.withAlphaComponent(alpha)])) ?? image
             let factor = min(iconBox/max(1,tinted.size.width),iconBox/max(1,tinted.size.height))
@@ -101,6 +109,9 @@ class StudioButton:NSButton {
             let keyFont = NSFont.monospacedSystemFont(ofSize:10,weight:.medium)
             let width = (shortcut as NSString).size(withAttributes:[.font:keyFont]).width
             (shortcut as NSString).draw(at:CGPoint(x:rect.midX-width/2,y:rect.midY-6.5),withAttributes:[.font:keyFont,.foregroundColor:foreground.withAlphaComponent(alpha*0.85)])
+        }
+        if showsMenuIndicator {
+            Brand.symbol("chevron.down",size:9)?.withSymbolConfiguration(.init(paletteColors:[foreground.withAlphaComponent(alpha)]))?.draw(in:CGRect(x:bounds.maxX-13,y:bounds.midY-2.5,width:8,height:5),from:.zero,operation:.sourceOver,fraction:alpha,respectFlipped:true,hints:nil)
         }
     }
     override var focusRingMaskBounds:NSRect { bounds }
@@ -130,16 +141,21 @@ final class StudioSegments:NSSegmentedControl {
 }
 
 final class StudioColorWell:NSColorWell {
+    var prominentSample = false
     override var alignmentRectInsets:NSEdgeInsets { NSEdgeInsets(top:0,left:0,bottom:0,right:0) }
     override func draw(_ dirtyRect:NSRect) {
-        let sample = CGRect(x:6,y:bounds.midY-8,width:16,height:16)
+        let sampleSize:CGFloat = prominentSample ? 24 : 16
+        let sample = CGRect(x:6,y:bounds.midY-sampleSize/2,width:sampleSize,height:sampleSize)
         NSColor.secondaryLabelColor.withAlphaComponent(0.65).setFill()
-        NSBezierPath(ovalIn:sample).fill()
+        let outer = prominentSample ? NSBezierPath(roundedRect:sample,xRadius:5,yRadius:5) : NSBezierPath(ovalIn:sample)
+        outer.fill()
         let inside = sample.insetBy(dx:1.5,dy:1.5)
         NSGraphicsContext.saveGraphicsState()
-        NSBezierPath(ovalIn:inside).addClip()
+        let shape = prominentSample ? NSBezierPath(roundedRect:inside,xRadius:4,yRadius:4) : NSBezierPath(ovalIn:inside)
+        shape.addClip()
         if color.alphaComponent < 1 {
-            for y in 0..<4 { for x in 0..<4 {
+            let tiles = Int(ceil(inside.width/4))
+            for y in 0..<tiles { for x in 0..<tiles {
                 ((x+y).isMultiple(of:2) ? NSColor.lightGray : NSColor.white).setFill()
                 CGRect(x:inside.minX+CGFloat(x)*4,y:inside.minY+CGFloat(y)*4,width:4,height:4).fill()
             } }
@@ -149,7 +165,7 @@ final class StudioColorWell:NSColorWell {
         let rgb = color.usingColorSpace(.sRGB)
         func channel(_ value:CGFloat) -> Int { value.isFinite ? Int((min(1,max(0,value))*255).rounded()) : 0 }
         let hex = rgb.map { String(format:"#%02X%02X%02X",channel($0.redComponent),channel($0.greenComponent),channel($0.blueComponent)) } ?? "Color"
-        (hex as NSString).draw(at:CGPoint(x:29,y:bounds.midY-7),withAttributes:[.font:NSFont.monospacedSystemFont(ofSize:11,weight:.medium),.foregroundColor:NSColor.secondaryLabelColor])
+        (hex as NSString).draw(at:CGPoint(x:sample.maxX+7,y:bounds.midY-7),withAttributes:[.font:NSFont.monospacedSystemFont(ofSize:prominentSample ? 12 : 11,weight:.medium),.foregroundColor:prominentSample ? NSColor.labelColor : NSColor.secondaryLabelColor])
         Brand.symbol("chevron.down",size:8)?.withSymbolConfiguration(.init(paletteColors:[.secondaryLabelColor]))?.draw(in:CGRect(x:bounds.maxX-12,y:bounds.midY-3,width:7,height:6),from:.zero,operation:.sourceOver,fraction:0.7,respectFlipped:true,hints:nil)
     }
 }

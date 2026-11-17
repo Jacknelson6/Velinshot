@@ -10,7 +10,7 @@ final class DragExportButton:StudioButton,NSDraggingSource {
         super.init(frame:.zero)
         kind = .footer;title = "Drag";image = Brand.symbol("hand.point.up",size:17);symbolSize = 17;imageSpacing = 7;isBordered = false;font = .systemFont(ofSize:12,weight:.medium)
         translatesAutoresizingMaskIntoConstraints = false
-        widthAnchor.constraint(equalToConstant:90).isActive = true;heightAnchor.constraint(equalToConstant:36).isActive = true
+        widthAnchor.constraint(equalToConstant:90).isActive = true;heightAnchor.constraint(equalToConstant:StudioMetrics.controlHeight).isActive = true
         toolTip = "Drag a finished PNG to Finder or another app";setAccessibilityLabel("Drag finished screenshot")
     }
     required init?(coder:NSCoder) { fatalError("init(coder:) is unavailable") }

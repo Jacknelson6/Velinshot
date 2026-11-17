@@ -35,11 +35,21 @@ enum StudioSnapshots {
                 let view = root.superview ?? root
                 try write(view:view,to:directory.appendingPathComponent(name+".png"))
                 records.append(["file":name+".png","appearance":dark ? "dark" : "light","windowWidth":size.width,"windowHeight":size.height,"canvasWidth":editor.canvas.bounds.width,"canvasHeight":editor.canvas.bounds.height,"source":"native AppKit view hierarchy with synthetic fixture"])
+                editor.setAdvancedFrameExpanded(true);root.layoutSubtreeIfNeeded()
+                try write(view:view,to:directory.appendingPathComponent(name+"-advanced-frame.png"))
+                if minimum {
+                    guard let border = findView(in:root,identifier:"borderWidth") else { throw VelinshotError.invalidImage("The expanded inspector is missing Border.") }
+                    _ = border.scrollToVisible(border.bounds);root.layoutSubtreeIfNeeded()
+                    try write(view:view,to:directory.appendingPathComponent(name+"-advanced-frame-bottom.png"))
+                }
+                editor.setAdvancedFrameExpanded(false);editor.showInspectorSection(0);root.layoutSubtreeIfNeeded()
                 if !minimum {
                     editor.showInspectorSection(1);root.layoutSubtreeIfNeeded()
                     try write(view:view,to:directory.appendingPathComponent(name+"-backdrop.png"))
                     editor.showInspectorSection(2);root.layoutSubtreeIfNeeded()
                     try write(view:view,to:directory.appendingPathComponent(name+"-output.png"))
+                    editor.setTool(.blur);root.layoutSubtreeIfNeeded()
+                    try write(view:view,to:directory.appendingPathComponent(name+"-secondary-tool.png"))
                     editor.showInspectorSection(0);editor.setTool(.arrow);root.layoutSubtreeIfNeeded()
                     try write(view:view,to:directory.appendingPathComponent(name+"-markup.png"))
                     var margin = final;margin.style.inset = 12
@@ -52,9 +62,13 @@ enum StudioSnapshots {
                 editor.close()
             }
         }
-        let provenance:[String:Any] = ["description":"Native UI rendered from the real app with a synthetic fixture. These are view exports, not live screen recordings.","drawingSymbolPoints":20,"toolbarSymbolPoints":17,"drawingTargetPoints":[38,32],"footerActionHeightPoints":36,"panelBorders":false,"layouts":records]
+        let provenance:[String:Any] = ["description":"Native UI rendered from the real app with a synthetic fixture. These are view exports, not live screen recordings.","drawingSymbolPoints":StudioMetrics.toolSymbol,"toolbarSymbolPoints":StudioMetrics.toolbarSymbol,"drawingTargetPoints":[StudioMetrics.toolTarget,StudioMetrics.toolTarget],"footerActionHeightPoints":StudioMetrics.controlHeight,"visibleToolEntries":8,"headerActionEntries":4,"advancedFrameInitiallyExpanded":false,"panelBorders":false,"layouts":records]
         try JSONSerialization.data(withJSONObject:provenance,options:[.prettyPrinted,.sortedKeys]).write(to:directory.appendingPathComponent("provenance.json"),options:.atomic)
         print("Native studio views exported to \(directory.path)")
+    }
+    private static func findView(in view:NSView,identifier:String) -> NSView? {
+        if view.identifier?.rawValue == identifier { return view }
+        return view.subviews.compactMap{findView(in:$0,identifier:identifier)}.first
     }
     private static func write(view:NSView,to url:URL) throws {
         view.layoutSubtreeIfNeeded()

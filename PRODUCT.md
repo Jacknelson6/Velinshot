@@ -20,4 +20,4 @@ Capture area, window and display; import files and clipboard images; annotate, c
 
 Use synthetic screenshots and fixtures in documentation and issue reports. Distinguish implemented behavior from observed GUI checks. Record test scope and remaining manual checks in [validation](docs/QA.md), and measured resource use in [performance evidence](docs/PERFORMANCE.md).
 
-The source is MIT licensed. The preview is ad-hoc signed, without Developer ID or Apple notarization.
+The source is MIT licensed. The preview is ad-hoc signed, without Developer ID or Apple notarization; the release scripts support a separate, explicit Developer ID and notarization workflow.
