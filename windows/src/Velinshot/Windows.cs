@@ -136,6 +136,18 @@ internal sealed class SettingsWindow : StudioWindow
         Add(UI.Check("Show welcome window when opening the app", settings.ShowWelcome, v => settings.ShowWelcome = v), 6);
         Add(UI.Check("Launch at sign-in", LaunchesAtSignIn(), SetLaunchAtSignIn), 6);
 
+        Add(Section("Updates"), 22);
+        var automaticUpdates = UI.Check("Check for updates automatically", settings.AutomaticUpdateChecks, value => settings.AutomaticUpdateChecks = value);
+        automaticUpdates.IsEnabled = app.UpdatesAvailable;
+        Add(automaticUpdates);
+        var updateNote = UI.Label(app.UpdatesAvailable
+            ? "Notify me when an update is available. Downloads, installation and restarting stay under my control."
+            : app.UpdateUnavailableReason ?? "Updates are unavailable in this development build.", 12, secondary: true);
+        updateNote.TextWrapping = TextWrapping.Wrap;
+        updateNote.TextTrimming = TextTrimming.None;
+        Add(updateNote, 6);
+        Add(UI.Button("Check for updates…", null, app.CheckForUpdates, "Studio.SecondaryButton"), 8);
+
         Add(Section("Files & history"), 22);
         Add(UI.Check("Compress to JPEG by default", settings.JpegByDefault, v => settings.JpegByDefault = v));
         var quality = new Slider { Minimum = 10, Maximum = 100, Value = Math.Round(settings.Quality * 100), SmallChange = 1, LargeChange = 10, Width = 220, IsMoveToPointEnabled = true };

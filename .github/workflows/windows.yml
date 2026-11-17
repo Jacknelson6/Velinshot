@@ -34,9 +34,94 @@ jobs:
       - name: Build, engine checks and interaction checks
         # The platform self-check reads the live screen, which hosted runners do not provide reliably.
         run: ./scripts/check.ps1 -SkipPlatform -SkipRender
+      - name: Validate production public-key availability
+        id: production-key
+        run: |
+          $path = 'updates/windows-ed25519.pub'
+          if (-not (Test-Path $path)) { 'ready=false' >> $env:GITHUB_OUTPUT; exit 0 }
+          $key = (Get-Content -Raw $path).Trim()
+          $bytes = [Convert]::FromBase64String($key)
+          if ($bytes.Length -ne 32 -or [Convert]::ToBase64String($bytes) -ne $key -or
+              -not ($bytes | Where-Object { $_ -ne 0 }) -or $key -eq '11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=') {
+            throw 'The committed production public key is invalid or is public test material.'
+          }
+          'ready=true' >> $env:GITHUB_OUTPUT
+      - name: Package clean production installer without signing or publication
+        if: steps.production-key.outputs.ready == 'true'
+        run: ./scripts/package.ps1 -OutputDirectory dist/production
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: steps.production-key.outputs.ready == 'true'
+        with:
+          name: Velinshot-windows-production-x64
+          path: |
+            windows/dist/production/*-setup.exe
+            windows/dist/production/*.zip
+            windows/dist/production/*-BUILD-INFO.json
       - name: Package standalone build
-        run: ./scripts/package.ps1
+        # CI packages are explicitly nonproduction and use only the public RFC8032 fixture key.
+        run: ./scripts/package.ps1 -Fixture -OutputDirectory dist/fixture-build3
+      - name: Package next-version installer fixture
+        run: ./scripts/package.ps1 -Fixture -BuildNumber 4 -DisplayVersion 1.0.0-preview.4 -OutputDirectory dist/fixture-build4
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Velinshot-windows-x64
-          path: windows/dist/*.zip
+          path: |
+            windows/dist/fixture-build3/*-setup.exe
+            windows/dist/fixture-build3/*-BUILD-INFO.json
+            windows/dist/fixture-build4/*-setup.exe
+            windows/dist/fixture-build4/*-BUILD-INFO.json
+
+  signing-fixture:
+    needs: windows
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: Velinshot-windows-x64
+          path: fixture-builds
+      - name: Verify and extract official Sparkle signing tools
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error --max-time 120 https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz -o "$RUNNER_TEMP/Sparkle.tar.xz"
+          echo '1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27  '"$RUNNER_TEMP/Sparkle.tar.xz" | shasum -a 256 -c -
+          mkdir "$RUNNER_TEMP/sparkle-tools"
+          tar -xf "$RUNNER_TEMP/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle-tools"
+      - name: Sign public RFC8032 fixtures in an isolated temporary Keychain
+        shell: bash
+        run: |
+          python3 windows/scripts/prepare-update.py --self-check
+          python3 windows/scripts/prepare-update.py --tools "$RUNNER_TEMP/sparkle-tools/bin" --metadata fixture-builds/fixture-build3/*-BUILD-INFO.json fixture-builds/fixture-build4/*-BUILD-INFO.json --output signed-fixtures --fixture-ci
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: windows-signed-update-fixtures
+          path: signed-fixtures
+
+  updater-runtime:
+    needs: [windows, signing-fixture]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: Velinshot-windows-x64
+          path: windows/artifacts/update-input
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: windows-signed-update-fixtures
+          path: windows/artifacts/update-input/signed
+      - name: Exercise real strict updater, installer, relaunch, tamper and busy gates
+        run: ./scripts/check.ps1 -SignedUpdateFixtures artifacts/update-input
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: windows-updater-runtime-evidence
+          path: |
+            windows/artifacts/update-input/signed/*.txt
+            windows/artifacts/update-input/signed/relaunch-proof.json

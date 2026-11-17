@@ -19,6 +19,9 @@ internal static class DevTools
 {
     public static bool TryRun(App app, string[] args)
     {
+#if VELINSHOT_UPDATE_TESTS
+        if (UpdateChecks.TryRun(app, args)) return true;
+#endif
         var render = Array.IndexOf(args, "--render-docs");
         var check = Array.IndexOf(args, "--self-check");
         var interaction = Array.IndexOf(args, "--interaction-check");

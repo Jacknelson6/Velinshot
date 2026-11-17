@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.Reflection;
 using System.Text;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using Velinshot.Core;
 
@@ -25,6 +26,10 @@ public partial class App : Application
     private HistoryWindow? historyWindow;
     private ClosedScreenshot? lastClosed;
     private bool capturing;
+    private int preparingImages;
+    private bool updateRestarting;
+    private readonly List<Window> updateDisabledWindows = new();
+    private UpdateController? updates;
     private CancellationTokenSource? pipeCancellation;
 
     private sealed record ClosedScreenshot(BitmapSource Image, EditState State, string Title, HistoryEntry? Entry, string HistoryDirectory);
@@ -46,6 +51,7 @@ public partial class App : Application
         hotkeys.Capture += () => Capture();
         hotkeys.QuickCopy += () => Capture(quickCopy: true);
         if (DevTools.TryRun(this, StartupArguments)) return;
+        updates = new UpdateController(this, settings);
         hotkeys.Refresh();
         tray = new TrayIcon(this);
         settings.Changed += SettingsChanged;
@@ -53,11 +59,13 @@ public partial class App : Application
         var handled = HandleArguments(StartupArguments);
         if (!handled && !StartupArguments.Contains("--background") && settings.ShowWelcome) ShowWelcome();
         else if (!handled && hotkeys.CaptureError is { } error) tray?.Notify("Shortcut unavailable", error);
+        updates.Start();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         pipeCancellation?.Cancel();
+        updates?.Dispose();
         hotkeys.Dispose();
         tray?.Dispose();
         base.OnExit(e);
@@ -73,6 +81,35 @@ public partial class App : Application
 
     internal GlobalHotkeys Hotkeys => hotkeys;
     internal AppSettings Settings => settings;
+    internal bool UpdateRestarting => updateRestarting;
+    internal bool UpdatesAvailable => updates?.Available == true;
+    internal string? UpdateUnavailableReason => updates?.UnavailableReason;
+    internal void NotifyUpdate(string title, string message) => tray?.Notify(title, message);
+    internal string? UpdateBlockReason()
+    {
+        if (capturing) return "Finish or cancel your capture before installing the update.";
+        if (preparingImages > 0) return "An image is still opening. Wait for it to finish before installing the update.";
+        if (Windows.OfType<EditorWindow>().Any()) return "Save or copy your screenshots, then close their editor windows before installing the update.";
+        if (ComponentDispatcher.IsThreadModal || Windows.Cast<Window>().Any(w => w is StudioWindow && w.IsVisible && !w.IsEnabled && !updateDisabledWindows.Contains(w)))
+            return "Close the open dialog before installing the update.";
+        return null;
+    }
+    internal bool TryBeginUpdateRestart()
+    {
+        if (updateRestarting || UpdateBlockReason() is not null) return false;
+        updateRestarting = true;
+        foreach (var window in Windows.OfType<StudioWindow>().Where(window => window.IsVisible && window.IsEnabled))
+        { updateDisabledWindows.Add(window); window.IsEnabled = false; }
+        return true;
+    }
+    internal void CancelUpdateRestart()
+    {
+        foreach (var window in updateDisabledWindows) window.IsEnabled = true;
+        updateDisabledWindows.Clear(); updateRestarting = false;
+    }
+#if VELINSHOT_UPDATE_TESTS
+    internal void SetUpdaterBusyFixture(bool capture, int imports) { capturing = capture; preparingImages = imports; }
+#endif
 
     // MARK: Instances and arguments
 
@@ -115,6 +152,7 @@ public partial class App : Application
 
     internal async void Capture(bool quickCopy = false, bool display = false)
     {
+        if (updateRestarting) return;
         if (capturing) return;
         capturing = true;
         var hidden = new List<Window>();
@@ -153,33 +191,39 @@ public partial class App : Application
     /// (or copies directly for Capture and Copy).</summary>
     internal async void PrepareImages(IReadOnlyList<ImageRequest> requests, HistoryEntry? historyEntry = null, bool quickCopy = false)
     {
-        var style = settings.Style;
-        foreach (var request in requests)
+        if (updateRestarting) return;
+        preparingImages++;
+        try
         {
-            try
+            var style = settings.Style;
+            foreach (var request in requests)
             {
-                var prepared = await StaWorker.Work.Run(() =>
+                try
                 {
-                    var source = request.Input switch
+                    var prepared = await StaWorker.Work.Run(() =>
                     {
-                        string path => ImageLoader.Load(path),
-                        byte[] data => ImageLoader.Load(data),
-                        BitmapSource bitmap => ImageLoader.Adopt(bitmap),
-                        _ => throw VelinshotException.InvalidImage("Unsupported input.")
-                    };
-                    var preview = ImageLoader.Preview(source);
-                    if (request.State is { } state) return new PreparedDocument(source, state, request.Title, preview, new DocumentAnalysis());
-                    var (initial, analysis) = NewDocument.Prepare(source, style);
-                    return new PreparedDocument(source, initial, request.Title, preview, analysis);
-                });
-                if (quickCopy) await CopyPrepared(prepared);
-                else Present(prepared.Source, prepared.State, prepared.Title, historyEntry, prepared.Preview, prepared.Analysis);
-            }
-            catch (Exception error)
-            {
-                Dialogs.Error(null, $"{request.Title}: {error.Message}");
+                        var source = request.Input switch
+                        {
+                            string path => ImageLoader.Load(path),
+                            byte[] data => ImageLoader.Load(data),
+                            BitmapSource bitmap => ImageLoader.Adopt(bitmap),
+                            _ => throw VelinshotException.InvalidImage("Unsupported input.")
+                        };
+                        var preview = ImageLoader.Preview(source);
+                        if (request.State is { } state) return new PreparedDocument(source, state, request.Title, preview, new DocumentAnalysis());
+                        var (initial, analysis) = NewDocument.Prepare(source, style);
+                        return new PreparedDocument(source, initial, request.Title, preview, analysis);
+                    });
+                    if (quickCopy) await CopyPrepared(prepared);
+                    else Present(prepared.Source, prepared.State, prepared.Title, historyEntry, prepared.Preview, prepared.Analysis);
+                }
+                catch (Exception error)
+                {
+                    Dialogs.Error(null, $"{request.Title}: {error.Message}");
+                }
             }
         }
+        finally { preparingImages--; }
     }
 
     private async Task CopyPrepared(PreparedDocument prepared)
@@ -209,6 +253,7 @@ public partial class App : Application
     internal EditorWindow Present(BitmapSource image, EditState? state, string title, HistoryEntry? historyEntry = null,
                                   ImagePreview? preview = null, DocumentAnalysis? analysis = null)
     {
+        if (updateRestarting) throw new InvalidOperationException("Velinshot is restarting to install an update.");
         var editor = new EditorWindow(image, state, title, preview, analysis, settings) { HistoryEntry = historyEntry };
         editor.Closed += (_, _) =>
         {
@@ -238,12 +283,14 @@ public partial class App : Application
 
     internal void OpenImage()
     {
+        if (updateRestarting) return;
         var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Open image", Filter = EditorWindow.ImageFilter, Multiselect = true };
         if (dialog.ShowDialog() == true) OpenFiles(dialog.FileNames);
     }
 
     internal void OpenClipboard()
     {
+        if (updateRestarting) return;
         try
         {
             if (Clipboard.GetData("PNG") is MemoryStream png) { PrepareImages(new[] { new ImageRequest(png.ToArray(), null, "Screenshot") }); return; }
@@ -262,6 +309,7 @@ public partial class App : Application
 
     internal void ReopenClosed()
     {
+        if (updateRestarting) return;
         if (lastClosed is not { } closed) return;
         var entry = closed.HistoryDirectory == settings.HistoryDirectory ? closed.Entry : null;
         lastClosed = null;
@@ -272,6 +320,7 @@ public partial class App : Application
 
     internal void OpenHistoryEntry(HistoryEntry entry)
     {
+        if (updateRestarting) return;
         try
         {
             var (image, state) = new HistoryStore(settings.HistoryDirectory).Load(entry);
@@ -284,6 +333,7 @@ public partial class App : Application
 
     internal void ShowWelcome()
     {
+        if (updateRestarting) return;
         if (welcome is null)
         {
             welcome = new WelcomeWindow(this);
@@ -296,6 +346,7 @@ public partial class App : Application
 
     internal void ShowSettings()
     {
+        if (updateRestarting) return;
         if (settingsWindow is null)
         {
             settingsWindow = new SettingsWindow(this);
@@ -307,6 +358,7 @@ public partial class App : Application
 
     internal void ShowHistory()
     {
+        if (updateRestarting) return;
         if (historyWindow is null)
         {
             historyWindow = new HistoryWindow(this);
@@ -319,6 +371,7 @@ public partial class App : Application
 
     internal void ShowShortcuts()
     {
+        if (updateRestarting) return;
         var text = $"""
             Capture and edit: {settings.CaptureShortcut.Display}
             Capture and copy: {settings.QuickCopyShortcut.Display}
@@ -338,6 +391,7 @@ public partial class App : Application
 
     internal void ShowAbout()
     {
+        if (updateRestarting) return;
         var version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "Development";
         MessageBox.Show($"Velinshot for Windows {version.Split('+')[0]}\n\nFree screenshot editing. Frame, annotate and copy.\nNo account, uploads, analytics or watermark.\n\nMIT License.",
                         "About Velinshot", MessageBoxButton.OK, MessageBoxImage.None);
@@ -345,8 +399,7 @@ public partial class App : Application
 
     internal void CheckForUpdates()
     {
-        try { Process.Start(new ProcessStartInfo(ReleasesUrl) { UseShellExecute = true }); }
-        catch (Exception error) { Dialogs.Error(null, error); }
+        updates?.CheckForUpdates();
     }
 
     /// <summary>With "keep running" off, Velinshot quits when its last window closes.</summary>
@@ -354,7 +407,7 @@ public partial class App : Application
     {
         Dispatcher.BeginInvoke(() =>
         {
-            if (settings.KeepRunningInTray || capturing) return;
+            if (settings.KeepRunningInTray || capturing || preparingImages > 0 || updateRestarting) return;
             if (Windows.Cast<Window>().Any(w => w.IsVisible)) return;
             Shutdown();
         });
