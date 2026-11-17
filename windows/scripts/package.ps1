@@ -43,6 +43,7 @@ try {
     if ($key.Length -ne 32 -or [Convert]::ToBase64String($key) -ne $UpdatePublicKey -or -not ($key | Where-Object { $_ -ne 0 })) { throw "The public key is invalid." }
     if (-not $Fixture -and $UpdatePublicKey -eq $publicFixtureKey) { throw "A public test key can never authenticate a production release." }
     if ($FrameworkDependent -and -not $PortableOnly) { throw "Framework-dependent builds are portable-only; the standard installer is self-contained." }
+    if (-not $IsWindows -and -not $PortableOnly) { throw 'Installer packaging requires Windows. Use -PortableOnly for cross-target publish preflight.' }
     $dist = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $root 'dist' }
     $asset = "Velinshot-$DisplayVersion-$Runtime"
     foreach ($name in @("$asset.zip", "$asset-setup.exe", "$asset-BUILD-INFO.json")) {
@@ -131,11 +132,22 @@ try {
     $noticeManifest | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8NoBOM $noticeManifestPath
     $exe = Get-Item (Join-Path $output 'Velinshot.exe')
     $numericVersion = "1.0.0.$BuildNumber"
-    if ($exe.VersionInfo.FileVersion -ne $numericVersion -or $exe.VersionInfo.ProductVersion -ne $DisplayVersion) { throw "Executable versions do not match the release." }
+    $versionInput = $exe
+    $versionValidation = 'Windows native apphost FileVersionInfo'
+    if (-not $IsWindows) {
+        # Unix FileVersionInfo reads managed attributes, not the native Win32 apphost resources.
+        # Resolve the actual managed input through MSBuild; Windows CI still checks the published EXE.
+        $targetPath = (& dotnet msbuild (Join-Path $root 'src/Velinshot/Velinshot.csproj') -getProperty:TargetPath -p:Configuration=Release "-p:RuntimeIdentifier=$Runtime" -p:EnableWindowsTargeting=true -p:RestoreLockedMode=true -nodeReuse:false -nologo).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not [IO.Path]::IsPathFullyQualified($targetPath)) { throw 'Cannot locate the exact managed version input.' }
+        $versionInput = Get-Item $targetPath
+        $versionValidation = 'Cross-target managed input metadata; native apphost resources require Windows CI'
+    }
+    if ($versionInput.VersionInfo.FileVersion -ne $numericVersion -or $versionInput.VersionInfo.ProductVersion -ne $DisplayVersion) { throw "Executable versions do not match the release." }
     $metadata = [ordered]@{
         schemaVersion = 1; product = 'Velinshot.Windows'; displayVersion = $DisplayVersion; version = $numericVersion; build = $BuildNumber
         sourceCommit = $commit; sourceClean = $true; runtime = $Runtime; minimumWindowsBuild = 19041
         fixtureBuild = [bool]$Fixture; updatePublicKey = $UpdatePublicKey; updaterVersion = '3.1.0'; dotnetSdk = $selectedSdk
+        versionValidation = $versionValidation; versionInputSha256 = (Get-FileHash $versionInput.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         executableSha256 = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         thirdPartyNoticesSha256 = (Get-FileHash $noticeManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
         signing = 'Ed25519 update signatures are prepared locally; this executable has no Authenticode signature.'
