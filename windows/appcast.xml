@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:velinshot="https://github.com/Jacknelson6/Velinshot/updates" version="2.0">
+  <channel>
+    <title>Velinshot for Windows</title>
+    <link>https://github.com/Jacknelson6/Velinshot</link>
+    <item>
+      <title>Velinshot 1.0.0-preview.3</title>
+      <enclosure url="https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-1.0.0-preview.3-win-x64-setup.exe" length="56015359" type="application/octet-stream" sparkle:version="1.0.0.3" sparkle:shortVersionString="1.0.0-preview.3" sparkle:os="windows" sparkle:signature="QqWVgz5vbH+bmQOlCphkNP+KNK+AVqmvxiZDOHqDCv7LmjQGFA/mkV20SkbVbTqvxWER8iyDz/EVZ34EydVSBA==" velinshot:sourceCommit="44147d6c91a4c870a355cef1324279d85f58224c" velinshot:build="3" velinshot:runtime="win-x64" velinshot:minimumWindowsBuild="19041" />
+    </item>
+  </channel>
+</rss>
