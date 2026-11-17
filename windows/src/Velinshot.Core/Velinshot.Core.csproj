@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The image engine: one renderer for preview and export, built on WPF media
+       (PresentationCore) and Windows Imaging Component. No package dependencies. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Velinshot.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Velinshot.Checks" />
+    <InternalsVisibleTo Include="Velinshot" />
+  </ItemGroup>
+</Project>
