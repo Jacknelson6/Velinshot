@@ -58,14 +58,28 @@ internal readonly record struct Shortcut(uint Modifiers, uint VirtualKey)
 /// <summary>Preferences stored as JSON in %APPDATA%\Velinshot\settings.json.</summary>
 internal sealed class AppSettings
 {
+#if VELINSHOT_UPDATE_TESTS
+    public static string SupportDirectory { get; } = FixtureSupportDirectory();
+    private static string FixtureSupportDirectory()
+    {
+        var path = Path.GetFullPath(Environment.GetEnvironmentVariable("VELINSHOT_UPDATE_FIXTURE_DATA")
+            ?? throw new InvalidOperationException("Updater fixtures require an isolated data directory."));
+        var production = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Velinshot");
+        if (path.Equals(production, StringComparison.OrdinalIgnoreCase) || path.StartsWith(production + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Updater fixtures must never use production data.");
+        return path;
+    }
+#else
     public static string SupportDirectory { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Velinshot");
+#endif
 
     public static AppSettings Shared { get; } = new(Path.Combine(SupportDirectory, "settings.json"));
 
     public event Action? Changed;
 
     private readonly string path;
+    private readonly object saveLock = new();
     private Data data;
 
     private sealed class Data
@@ -78,6 +92,9 @@ internal sealed class AppSettings
         public bool JpegByDefault { get; set; } = true;
         public double Quality { get; set; } = 0.92;
         public bool ShowWelcome { get; set; } = true;
+        public bool AutomaticUpdateChecks { get; set; }
+        public DateTime LastUpdateCheckUtc { get; set; } = DateTime.MinValue;
+        public string? SkippedUpdateVersion { get; set; }
         public string Filename { get; set; } = "Screenshot";
         public string? SaveDirectory { get; set; }
         public string? HistoryDirectory { get; set; }
@@ -106,15 +123,18 @@ internal sealed class AppSettings
 
     private void Save(bool notify = true)
     {
-        try
+        lock (saveLock)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var bytes = JsonSerializer.SerializeToUtf8Bytes(data, VelinshotJson.Options);
-            var temporary = path + ".tmp";
-            File.WriteAllBytes(temporary, bytes);
-            File.Move(temporary, path, overwrite: true);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                var bytes = JsonSerializer.SerializeToUtf8Bytes(data, VelinshotJson.Options);
+                var temporary = path + ".tmp";
+                File.WriteAllBytes(temporary, bytes);
+                File.Move(temporary, path, overwrite: true);
+            }
+            catch (Exception) { /* Preferences are best effort; the app keeps working in memory. */ }
         }
-        catch (Exception) { /* Preferences are best effort; the app keeps working in memory. */ }
         if (notify) Changed?.Invoke();
     }
 
@@ -126,6 +146,9 @@ internal sealed class AppSettings
     public bool JpegByDefault { get => data.JpegByDefault; set { data.JpegByDefault = value; Save(); } }
     public double Quality { get => Math.Clamp(data.Quality, 0.1, 1); set { data.Quality = Math.Clamp(value, 0.1, 1); Save(); } }
     public bool ShowWelcome { get => data.ShowWelcome; set { data.ShowWelcome = value; Save(); } }
+    public bool AutomaticUpdateChecks { get => data.AutomaticUpdateChecks; set { data.AutomaticUpdateChecks = value; Save(); } }
+    internal DateTime LastUpdateCheckUtc { get => data.LastUpdateCheckUtc; set { data.LastUpdateCheckUtc = value; Save(notify: false); } }
+    internal string? SkippedUpdateVersion { get => data.SkippedUpdateVersion; set { data.SkippedUpdateVersion = value; Save(notify: false); } }
     public string Filename { get => data.Filename; set { data.Filename = value; Save(); } }
     public Shortcut CaptureShortcut { get => data.CaptureShortcut; set { data.CaptureShortcut = value; Save(); } }
     public Shortcut QuickCopyShortcut { get => data.QuickCopyShortcut; set { data.QuickCopyShortcut = value; Save(); } }

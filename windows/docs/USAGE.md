@@ -1,5 +1,17 @@
 # User guide
 
+## Install and update
+
+Use the Windows Setup download to install under `%LOCALAPPDATA%\Programs\Velinshot`. It includes its .NET runtime and needs no administrator request. Quit Velinshot from the notification area before manually replacing an installation. Setup refuses a running copy and does not force-close screenshots.
+
+Choose **Check for Updates…** from the notification-area menu or the editor's More menu. The installed app authenticates both the feed and installer. Save or copy your screenshots and close their editor windows before choosing installation. Active capture, imports and dialogs defer the handoff; installation and relaunch happen only after your confirmation.
+
+Enable **Settings → Check for updates automatically** if you want daily availability notifications. It is off by default. This permission covers checking and notifying, not downloading or restarting without your choice.
+
+Your `%APPDATA%\Velinshot` settings, presets, backgrounds and optional history remain separate from the app. Updating or uninstalling does not remove them. Portable copies are not replaced in place. Install with Setup to use in-app updates.
+
+The preview has no Authenticode certificate. Update signatures authenticate downloaded updates but do not remove Windows SmartScreen first-launch warnings.
+
 ## Capture and import
 
 Press **Ctrl+Shift+4** to capture and edit. Velinshot freezes every connected display, then shows an overlay on each one. Drag an area; you can drag across display boundaries. **Space** switches to window selection (click a window). **Escape** or a right-click cancels. A plain click without a drag keeps the overlay open.

@@ -11,6 +11,12 @@
     <StartupObject>Velinshot.Program</StartupObject>
     <!-- Source-generated P/Invoke (LibraryImport) marshalling. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <DefineConstants Condition="'$(VelinshotUpdateTests)' == 'true'">$(DefineConstants);VELINSHOT_UPDATE_TESTS</DefineConstants>
+    <WindowsSourceClean Condition="'$(WindowsSourceClean)' == ''">false</WindowsSourceClean>
+    <VelinshotUpdateTests Condition="'$(VelinshotUpdateTests)' == ''">false</VelinshotUpdateTests>
+    <WindowsUpdatePublicKey Condition="'$(WindowsUpdatePublicKey)' == '' And Exists('$(MSBuildThisFileDirectory)..\..\updates\windows-ed25519.pub')">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\..\updates\windows-ed25519.pub').Trim())</WindowsUpdatePublicKey>
     <!-- WFO0003 targets Windows Forms apps; this WPF app correctly declares per-monitor-v2 DPI in app.manifest. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
@@ -21,7 +27,20 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Velinshot.Core\Velinshot.Core.csproj" />
+    <PackageReference Include="NetSparkleUpdater.UI.WPF" Version="[3.1.0]" />
+    <AssemblyMetadata Include="VelinshotSourceCommit" Value="$(WindowsSourceCommit)" />
+    <AssemblyMetadata Include="VelinshotSourceClean" Value="$(WindowsSourceClean)" />
+    <AssemblyMetadata Include="VelinshotBuildNumber" Value="$(WindowsBuildNumber)" />
+    <AssemblyMetadata Include="VelinshotRuntime" Value="$(RuntimeIdentifier)" />
+    <AssemblyMetadata Include="VelinshotFixtureBuild" Value="$(VelinshotUpdateTests)" />
+    <AssemblyMetadata Include="VelinshotUpdatePublicKey" Value="$(WindowsUpdatePublicKey)" />
   </ItemGroup>
+  <Target Name="ValidateProductionUpdateConfiguration" BeforeTargets="Publish" Condition="'$(VelinshotProductionRelease)' == 'true'">
+    <Error Condition="'$(VelinshotUpdateTests)' == 'true'" Text="Test-enabled updater builds cannot be published as production releases." />
+    <Error Condition="'$(WindowsSourceClean)' != 'true' Or !$([System.Text.RegularExpressions.Regex]::IsMatch('$(WindowsSourceCommit)', '^[0-9a-f]{40}$'))" Text="A production release requires a clean, full source commit." />
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(WindowsUpdatePublicKey)', '^[A-Za-z0-9+/]{43}=$')) Or '$(WindowsUpdatePublicKey)' == '11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=' Or '$(WindowsUpdatePublicKey)' == 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='" Text="A real Windows Ed25519 public key is required. Missing, zero and public fixture keys are forbidden in production." />
+    <Error Condition="'$(RuntimeIdentifier)' != 'win-x64' And '$(RuntimeIdentifier)' != 'win-arm64'" Text="Windows release architecture must be win-x64 or win-arm64." />
+  </Target>
   <ItemGroup>
     <!-- The app icon is shared with the macOS app at the repository root. -->
     <Resource Include="..\..\..\Resources\AppIcon.png" Link="Resources\AppIcon.png" />

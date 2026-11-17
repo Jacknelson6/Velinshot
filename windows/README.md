@@ -28,24 +28,52 @@ No account, subscription, analytics, uploads or watermark. Screenshots stay on y
 
 ## Run it
 
-Download or build `Velinshot.exe` (see below) and run it. There is no installer: the standalone exe needs nothing else installed. Velinshot lives in the notification area so its shortcuts keep working after you close its windows; quit from that icon's menu.
+Download the [Windows Setup EXE](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-1.0.0-preview.3-win-x64-setup.exe). Requires Windows 10 version 2004 or later. Setup installs for your user under `%LOCALAPPDATA%\Programs\Velinshot`, with no .NET runtime installation or administrator request. Quit a running copy before installing; Setup will refuse to replace it while it is open.
 
-The preview exe is **not code-signed**, so Windows SmartScreen may say it "protected your PC". Choose **More info → Run anyway** for a build you produced or trust. Removing that prompt for public downloads needs an Authenticode code-signing certificate.
+The preview has **no Authenticode code-signing certificate**. Windows may show a SmartScreen warning. The updater's Ed25519 signatures authenticate the update feed and installer; they do not establish Microsoft publisher trust or remove first-launch warnings.
+
+Velinshot stays in the notification area so shortcuts work after its windows close. Quit from that icon's menu. Settings, presets, backgrounds and optional history remain in `%APPDATA%\Velinshot`, separate from the installation. Updating or uninstalling the app leaves that data in place.
+
+## Updates
+
+Use **Check for Updates…** from the notification-area menu or the editor's More menu. The installed app verifies both the feed and installer before handing off to the standard installer, then relaunches. Save or copy your screenshots and close their editors first. Active capture, image imports and dialogs also defer installation.
+
+**Settings → Check for updates automatically** is off by default. When enabled, NetSparkle checks daily and notifies you about available updates. It does not automatically download, install or restart. You choose when to continue.
+
+Portable/source builds remain available for development. Portable or moved copies are not replaced in place; install with Setup to enable updates. The app verifies that its running folder matches its per-user installation record, including a custom Setup folder. A development build without clean release metadata and the real Windows public key explains that updates are unavailable. It never falls back to unsigned downloads. See [validation](docs/QA.md) for the observed test scope and remaining Windows checks.
 
 Windows needs no screen-recording permission. Content an app protects from capture (some video players, DRM) appears black, as in every Windows screenshot tool.
 
 ## Build from source
 
-Requires Windows 10 version 2004 or later and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). No other packages are used.
+Requires Windows 10 version 2004 or later, the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and PowerShell 7 for the packaging/check scripts. The updater uses pinned NetSparkle 3.1.0; NuGet restores its locked dependencies. Inno Setup 6 creates the standard installer.
 
 ```powershell
 git clone https://github.com/Jacknelson6/Velinshot.git
 cd Velinshot\windows
-powershell -ExecutionPolicy Bypass -File scripts/check.ps1      # build + every automated check
-powershell -ExecutionPolicy Bypass -File scripts/package.ps1    # dist\Velinshot-<version>-win-x64.zip
+pwsh -File scripts/check.ps1      # build + automated checks
+dotnet run --project src/Velinshot
 ```
 
-`package.ps1` options: `-Runtime win-arm64` for Windows on Arm; `-FrameworkDependent` for a 25 MB exe that needs the .NET 10 Desktop Runtime. For day-to-day work, `dotnet run --project src/Velinshot` starts the app.
+Release packaging requires a clean committed source tree and the Windows release public key in `updates/windows-ed25519.pub`. That file contains only the public key. The corresponding private key stays in the release owner's macOS Keychain, under the separate `com.jacknelson.velinshot.windows.ed25519` account. No private release key belongs in CI.
+
+```powershell
+pwsh -File scripts/package.ps1
+```
+
+This emits the Setup EXE, portable ZIP and immutable `BUILD-INFO.json` sidecar. `-Runtime win-arm64` selects Windows on Arm; only an architecture with a published, matching feed can update. `-FrameworkDependent -PortableOnly` produces a development portable build that requires the .NET 10 Desktop Runtime. Existing output directories are refused rather than overwritten.
+
+The release owner signs the exact installer and complete appcast locally using the official Sparkle tools:
+
+```sh
+python3 windows/scripts/prepare-update.py --tools /path/to/Sparkle/bin \
+  --metadata /path/to/Velinshot-1.0.0-preview.3-win-x64-BUILD-INFO.json \
+  --output /path/to/new-signed-windows-feed
+```
+
+The script only looks up an existing Windows key, verifies source/build/artifact identity and prepares public signatures over unchanged installer and XML bytes. It does not generate a production key or publish a release. Publish the feed and adjacent `.signature` together on the repository's `updates` branch under `windows/`; installers remain immutable assets of their versioned release. The x64 feed is `appcast.xml`, and the ARM64 feed is `appcast-arm64.xml`; publishing one must preserve the other. `python3 windows/scripts/prepare-update.py --self-check` checks this routing without accessing a key.
+
+Both Setup and the portable ZIP include official pinned package and bundled .NET runtime license files and notices under `ThirdPartyNotices`, with a hashed package manifest.
 
 ## How it maps to the Mac app
 
