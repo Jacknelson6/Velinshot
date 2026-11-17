@@ -30,7 +30,7 @@ The table maps capabilities to the app's controls. [Validation and remaining liv
 | Screenshot history | Opt-in editable history with local storage bounds and folder selection |
 | Reopen closed screenshot | One most recent closed image kept in memory |
 | Launch/login, Dock, sound, filenames, default save folder | Settings using native macOS services |
-| Updates | Manual public GitHub release check |
+| Updates | Native Sparkle check, signed download/install and restart; optional automatic checks, no silent install |
 | Automatic PII detection | Not included; manual blur and redaction remain available |
 | Cloud upload | Not implemented |
 | License | MIT-licensed source, no paywall or required watermark |

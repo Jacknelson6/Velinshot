@@ -3,6 +3,11 @@ import ServiceManagement
 
 final class SettingsController: NSWindowController,NSTextFieldDelegate {
     private let shortcuts: GlobalShortcuts
+    private let updater: UpdaterController?
+    private var updateObserver:NSObjectProtocol?
+    private var updateCheck:NSButton?
+    private var updateNow:NSButton?
+    private var updateNote:NSTextField?
     private var errorLabel = Brand.label("",size:11)
     private var permissionLabel = Brand.label("",size:11)
     private var captureRecorder: ShortcutRecorder!
@@ -10,14 +15,18 @@ final class SettingsController: NSWindowController,NSTextFieldDelegate {
     private var loginButton: NSButton!
     var onClose: (() -> Void)?
     var onRefresh: (() -> Void)?
-    init(shortcuts:GlobalShortcuts) {
-        self.shortcuts = shortcuts
+    init(shortcuts:GlobalShortcuts,updater:UpdaterController? = nil) {
+        self.shortcuts = shortcuts;self.updater = updater
         let window = NSWindow(contentRect:CGRect(x:0,y:0,width:520,height:660),styleMask:[.titled,.closable],backing:.buffered,defer:false)
         window.title = "Velinshot Settings";window.isReleasedWhenClosed = false
         super.init(window:window)
         build()
+        if let updater {
+            updateObserver = NotificationCenter.default.addObserver(forName:UpdaterController.stateChanged,object:updater,queue:.main) { [weak self] _ in self?.refreshUpdates() }
+        }
         window.center()
     }
+    deinit { if let updateObserver { NotificationCenter.default.removeObserver(updateObserver) } }
     required init?(coder:NSCoder) { fatalError("init(coder:) is unavailable") }
     override func showWindow(_ sender:Any?) {
         refresh();NSApp.setActivationPolicy(.regular);super.showWindow(sender);window?.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
@@ -28,6 +37,7 @@ final class SettingsController: NSWindowController,NSTextFieldDelegate {
         captureRecorder?.shortcut = AppSettings.shared.captureShortcut;copyRecorder?.shortcut = AppSettings.shared.quickCopyShortcut
         permissionLabel.stringValue = CGPreflightScreenCaptureAccess() ? "Screen capture access is enabled." : "This app copy needs capture access. If the macOS switch is already on, remove its entry and add this copy again."
         loginButton?.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        refreshUpdates()
         onRefresh?()
     }
     private func build() {
@@ -83,6 +93,15 @@ final class SettingsController: NSWindowController,NSTextFieldDelegate {
             }
         }
         add(loginButton)
+        add(section("Updates"))
+        let automatic = check("Automatically check for updates",value:updater?.automaticallyChecksForUpdates ?? false) { [weak self] enabled in
+            self?.updater?.automaticallyChecksForUpdates = enabled;self?.refreshUpdates()
+        }
+        updateCheck = automatic;add(automatic)
+        let checkNow = ActionButton(title:"Check for Updates…") { [weak self] in self?.updater?.checkForUpdates(nil);self?.refreshUpdates() }
+        updateNow = checkNow;add(checkNow)
+        let updateDescription = Brand.label("",size:11);updateDescription.maximumNumberOfLines = 4;updateDescription.lineBreakMode = .byWordWrapping;updateDescription.textColor = .secondaryLabelColor
+        updateNote = updateDescription;add(updateDescription)
         add(section("Files & history"))
         add(check("Compress to JPEG by default",value:AppSettings.shared.jpegByDefault){AppSettings.shared.jpegByDefault = $0})
         add(check("Keep editable screenshot history on this Mac",value:AppSettings.shared.historyEnabled){AppSettings.shared.historyEnabled = $0})
@@ -104,6 +123,12 @@ final class SettingsController: NSWindowController,NSTextFieldDelegate {
         };add(historyDirectory)
         let note = Brand.label("Free. No accounts, uploads, analytics or watermark. Capture permissions are controlled by macOS.",size:11)
         note.maximumNumberOfLines = 3;note.lineBreakMode = .byWordWrapping;note.textColor = .secondaryLabelColor;add(note)
+    }
+    private func refreshUpdates() {
+        updateCheck?.state = updater?.automaticallyChecksForUpdates == true ? .on : .off
+        updateCheck?.isEnabled = updater?.configured == true
+        updateNow?.isEnabled = updater?.canCheckForUpdates == true
+        updateNote?.stringValue = updater?.settingsDescription ?? "Updates are unavailable in this validation session."
     }
     private func section(_ title:String) -> NSView {
         let label = Brand.label(title,size:13,weight:.semibold)

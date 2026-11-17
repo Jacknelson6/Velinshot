@@ -22,6 +22,10 @@ jobs:
           persist-credentials: false
       - name: Report toolchain
         run: swift --version
+      - name: Resolve pinned updater dependency
+        run: |
+          swift package resolve
+          git diff --exit-code -- Package.resolved
       - name: Run XCTest
         run: swift test -j 2
       - name: Build native app
@@ -30,6 +34,8 @@ jobs:
         run: build/Velinshot.app/Contents/MacOS/Velinshot --smoke-check .build/integration-checks
       - name: Validate bundle
         run: python3 scripts/verify-bundle.py build/Velinshot.app
+      - name: Validate update release metadata
+        run: python3 scripts/checks/check-update-metadata.py
       - name: Package native build
         run: ditto -c -k --keepParent build/Velinshot.app build/Velinshot-${{ runner.arch }}.zip
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -12,7 +12,7 @@ Velinshot is a free, native macOS screenshot editor for people who capture, anno
 
 ## Platform and scope
 
-macOS 14 or later, using Swift, AppKit, Core Graphics, ScreenCaptureKit, ImageIO and Vision. The packaged preview targets Apple Silicon. Source builds use the compatible Mac's native architecture. There are no external Swift package dependencies or embedded browser.
+macOS 14 or later, using Swift, AppKit, Core Graphics, ScreenCaptureKit, ImageIO and Vision, with pinned Sparkle 2.10.1 for authenticated updates. The packaged preview targets Apple Silicon. Source builds use the compatible Mac's native architecture. The screenshot editor remains native.
 
 Capture area, window and display; import files and clipboard images; annotate, crop and frame; copy, save, drag and share. Local OCR, presets and optional editable history support the same workflow. Automatic PII detection and built-in cloud uploads are excluded. See the [feature reference](docs/FEATURES.md).
 

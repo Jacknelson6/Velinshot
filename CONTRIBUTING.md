@@ -44,7 +44,7 @@ bash scripts/package-release.sh
 
 An explicitly requested identity must exist; the build never silently falls back to ad-hoc signing. That mode enables hardened runtime and a secure timestamp. The notarization script requires Developer ID signing, waits at most 15 minutes for Apple's acceptance, staples the ticket and checks both the staple and Gatekeeper. Packaging derives notarization status from validation. Current preview downloads are still ad-hoc signed and not notarized.
 
-Replacing an ad-hoc build can require Screen Recording consent again because its signature changed. Do not change TCC records or remove quarantine attributes to bypass macOS checks. **Check for Updates** opens the GitHub releases page so prereleases remain discoverable.
+Replacing an ad-hoc build can require Screen Recording consent again because its signature changed. Do not change TCC records or remove quarantine attributes to bypass macOS checks. **Check for Updates** uses the bundled Sparkle updater. [Update release instructions](docs/UPDATES.md#release-maintainers) cover the separate app-scoped Ed25519 key and signed feed. Do not export that private key to CI or another host.
 
 ## Changes
 

@@ -7,7 +7,7 @@
     <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-191A25?style=flat-square">
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-191A25?style=flat-square"></a>
   </p>
-  <p><a href="https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.2"><strong>Download preview</strong></a> · <a href="#build-from-source">Build from source</a> · <a href="docs/USAGE.md">User guide</a></p>
+  <p><a href="https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.3"><strong>Download preview</strong></a> · <a href="#build-from-source">Build from source</a> · <a href="docs/USAGE.md">User guide</a></p>
 </div>
 
 <picture>
@@ -29,7 +29,7 @@ Capture opens a compact editor. Draw an arrow, adjust the frame, then copy the r
 
 ## Download and open
 
-[Download the Apple Silicon disk image](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.2/Velinshot-preview-arm64.dmg) or [ZIP archive](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.2/Velinshot-preview-arm64.zip). Requires **macOS 14 or later**.
+[Download the Apple Silicon disk image](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-preview-arm64.dmg) or [ZIP archive](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-preview-arm64.zip). Requires **macOS 14 or later**.
 
 Quit any running copy first. Open the disk image and drag **Velinshot.app** onto **Applications**, then open `/Applications/Velinshot.app`. For the ZIP, unzip and move the app into Applications. Keep that installed copy in one location before granting capture access.
 
@@ -49,9 +49,11 @@ For capture, enable **Velinshot** under **Privacy & Security → Screen & System
 
 ## Small and local
 
-Built with Swift, AppKit and system frameworks. No external package dependencies or embedded browser. Image preparation runs on a serial worker, and editing reuses a reduced display proxy while exports retain the original pixels. [Measured performance](docs/PERFORMANCE.md).
+Built with Swift, AppKit and system frameworks, with [Sparkle](https://sparkle-project.org/) for authenticated in-app updates. The editor is native. Image preparation runs on a serial worker, and editing reuses a reduced display proxy while exports retain the original pixels. [Earlier performance measurements](docs/PERFORMANCE.md).
 
-No account, subscription, analytics or required watermark. Screenshots stay on your Mac unless you share them. History is off by default. **Check for Updates** opens the public GitHub releases page in your browser, including preview releases. Automatic PII detection is excluded; manual blur and redaction are available.
+No account, subscription, analytics or required watermark. Screenshots stay on your Mac unless you share them. History is off by default. **Check for Updates** checks inside the app, verifies signed downloads and offers installation and restart. Automatic checks are off until you enable them in Settings. Checks contact GitHub without system profiling or screenshot uploads; installation always needs your action. Close open screenshots before updating. [Update behavior and security](docs/UPDATES.md).
+
+Preview 2 and older need one manual installation of a newer preview to gain the updater. Apple Developer ID signing and notarization remain separate from Sparkle's update signatures. Automatic PII detection is excluded; manual blur and redaction are available.
 
 ## Windows
 

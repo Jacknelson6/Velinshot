@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 bundle_path="${1:-build/Velinshot.app}"
 output="${2:-build/release}"
-python3 scripts/verify-bundle.py "$bundle_path"
+python3 scripts/verify-bundle.py "$bundle_path" --require-updater
 python3 - "$bundle_path" <<'PY'
 import json, subprocess, sys
 from pathlib import Path

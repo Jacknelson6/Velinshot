@@ -28,6 +28,7 @@ if [ -f Resources/AppIcon.png ]; then
   iconutil -c icns "$iconset_dir" --output "$bundle_path/Contents/Resources/AppIcon.icns"
 fi
 cp Resources/Info.plist "$bundle_path/Contents/Info.plist"
+python3 scripts/sparkle_support.py embed "$bundle_path" --identity "$signing_identity"
 python3 - "$bundle_path/Contents/Resources/BuildInfo.json" <<'PY'
 import json, plistlib, subprocess, sys
 from pathlib import Path

@@ -4,11 +4,13 @@ import argparse
 from pathlib import Path
 import plistlib
 import subprocess
+from sparkle_support import linkage, update_configuration, verify_framework, verify_production_binary
 
 parser = argparse.ArgumentParser()
 parser.add_argument('bundle', type=Path)
 parser.add_argument('--require-developer-id', action='store_true')
 parser.add_argument('--require-notarized', action='store_true')
+parser.add_argument('--require-updater', action='store_true')
 args = parser.parse_args()
 bundle = args.bundle.resolve()
 
@@ -37,11 +39,10 @@ if args.require_developer_id or args.require_notarized:
 if args.require_notarized:
     subprocess.run(['xcrun', 'stapler', 'validate', str(bundle)], check=True, capture_output=True)
     subprocess.run(['spctl', '--assess', '--type', 'execute', str(bundle)], check=True, capture_output=True)
-libraries = subprocess.run(['otool', '-L', str(binary)], check=True, capture_output=True, text=True).stdout
-for line in libraries.splitlines()[1:]:
-    path = line.strip().split(' (', 1)[0]
-    require(path.startswith(('/System/Library/', '/usr/lib/', '@rpath/libswift')),
-            f'Unexpected external runtime: {path}')
+verify_framework(bundle, require_developer_id=args.require_developer_id or args.require_notarized)
+if args.require_updater:
+    update_configuration(info)
+    verify_production_binary(binary)
 total = sum(path.stat().st_size for path in bundle.rglob('*') if path.is_file())
 trust = '; notarization and Gatekeeper verified' if args.require_notarized else '; notarization not checked'
-print(f'Bundle verified: {total:,} bytes; stable identity, {signature_kind} signature, system frameworks only{trust}.')
+print(f'Bundle verified: {total:,} bytes; stable identity, {signature_kind} signature, system frameworks plus pinned Sparkle 2.10.1{trust}.')

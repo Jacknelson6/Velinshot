@@ -15,8 +15,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var editors:[EditorController] = []
     private var statusItem:NSStatusItem?
     private var welcome:NSWindowController?
+    private lazy var updater = UpdaterController { [weak self] in
+        guard let self else { return UpdateWorkState(modal:true) }
+        return UpdateWorkState(capturing:self.capture.isCapturing,preparingImage:self.importer.isBusy,openEditors:self.editors.count,modal:NSApp.modalWindow != nil)
+    }
     private lazy var settings:SettingsController = {
-        let controller = SettingsController(shortcuts:shortcuts)
+        let controller = SettingsController(shortcuts:shortcuts,updater:updater)
         controller.onRefresh = { [weak self] in self?.refreshWelcomeShortcuts() }
         return controller
     }()
@@ -40,11 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationDidFinishLaunching(_ notification:Notification) {
         NSApp.appearance = nil
         buildMenus()
+        updater.start()
         shortcuts.onCapture = { [weak self] in self?.takeCapture() }
         shortcuts.onQuickCopy = { [weak self] in self?.takeCapture(quickCopy:true) }
         shortcuts.refresh()
         settingsObserver = NotificationCenter.default.addObserver(forName:AppSettings.changed,object:nil,queue:.main) { [weak self] _ in self?.settingsDidChange() }
-        closeObserver = NotificationCenter.default.addObserver(forName:NSWindow.willCloseNotification,object:nil,queue:.main) { [weak self] _ in DispatchQueue.main.async { self?.updateDockPolicy() } }
+        closeObserver = NotificationCenter.default.addObserver(forName:NSWindow.willCloseNotification,object:nil,queue:.main) { [weak self] _ in DispatchQueue.main.async { self?.updateDockPolicy();self?.updater.workStateDidChange() } }
         if CommandLine.arguments.contains("--demo") {
             do { present(try DemoFixture.make(),state:DemoFixture.style(),title:"Studio notes · Demo") } catch { showError(error) }
         } else if !pendingURLs.isEmpty { openURLs(pendingURLs);pendingURLs.removeAll() }
@@ -52,6 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         else { NSApp.setActivationPolicy(.accessory) }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication) -> Bool { false }
+    func applicationShouldTerminate(_ sender:NSApplication) -> NSApplication.TerminateReply {
+        updater.mayTerminateForUpdate() ? .terminateNow : .terminateCancel
+    }
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows flag:Bool) -> Bool {
         if !flag { if let editor = activeEditor { editor.showWindow(nil) } else { showWelcome() } }
         return true
@@ -126,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func takeCapture(quickCopy:Bool = false,display:Bool = false) {
         if NSApp.modalWindow == nil,!capture.isCapturing { importer.cancel();finishLoading() }
         capture.begin(display ? .display : .area) { [weak self] result in
+            defer { self?.updater.workStateDidChange() }
             switch result {
             case .success(let image):
                 self?.prepareImages([(.image(image),nil,"Screenshot")],quickCopy:quickCopy)
@@ -134,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 self?.showCaptureError(error)
             }
         }
+        updater.workStateDidChange()
     }
     private func present(_ image:CGImage,state:EditState? = nil,title:String = "Screenshot",historyEntry:HistoryEntry? = nil,preparedPreview:ImagePreview? = nil,preparedAnalysis:DocumentAnalysis = DocumentAnalysis()) {
         guard let preparedPreview else { prepareImages([(.image(image),state,title)],historyEntry:historyEntry);return }
@@ -144,6 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         editor.onClose = { [weak self,weak editor] in
             if let editor { self?.lastClosed = ClosedScreenshot(image:editor.source,state:editor.state,title:editor.window?.title ?? "Screenshot",historyEntry:editor.historyEntry,historyDirectory:AppSettings.shared.historyDirectory) }
             self?.editors.removeAll{$0 === editor}
+            self?.updater.workStateDidChange()
             DispatchQueue.main.async { [weak self] in self?.updateDockPolicy() }
         }
         editor.onCapture = { [weak self] in self?.takeCapture() }
@@ -153,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         editor.onHistory = { [weak self] in self?.showHistory() }
         editor.onImportURL = { [weak self] in self?.openURL($0) }
         editor.onImportData = { [weak self] data in self?.prepareImages([(.encoded(data),nil,"Screenshot")]) }
-        editors.append(editor);editor.showWindow(nil);editor.persistHistory()
+        editors.append(editor);editor.showWindow(nil);editor.persistHistory();updater.workStateDidChange()
     }
     private func updateDockPolicy() {
         if AppSettings.shared.hideDockWhenClosed,!NSApp.windows.contains(where:{$0.isVisible}) { NSApp.setActivationPolicy(.accessory) }
@@ -186,6 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             try DocumentPreparation.prepare(input,style:style,state:state,title:title,quickCopy:quickCopy,ticket:ticket)
         } }) { [weak self] result in
             guard let self else { return }
+            defer { self.updater.workStateDidChange() }
             if !self.importer.isBusy { self.finishLoading() }
             switch result {
             case .success(let prepared):
@@ -197,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             case .failure(let error):self.showError(error)
             }
         }
+        updater.workStateDidChange()
         // A one-shot delayed surface avoids flashing a window for small files.
         let task = DispatchWorkItem { [weak self] in
             guard let self,self.importer.isBusy else { return }
@@ -206,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         loadingTask = task;DispatchQueue.main.asyncAfter(deadline:.now()+0.12,execute:task)
     }
-    private func finishLoading() { loadingTask?.cancel();loadingTask = nil;loadingWindow?.close();loadingWindow = nil }
+    private func finishLoading() { loadingTask?.cancel();loadingTask = nil;loadingWindow?.close();loadingWindow = nil;updater.workStateDidChange() }
     private func copyPrepared(_ prepared:PreparedDocument) {
         guard let output = prepared.quickCopyOutput else { return }
         let board = NSPasteboard.general;board.clearContents()
@@ -252,6 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func redo(_ sender:Any?) { activeEditor?.redoEdit() }
     func validateMenuItem(_ menuItem:NSMenuItem) -> Bool {
         switch menuItem.action {
+        case #selector(checkUpdates):return updater.canCheckForUpdates
         case #selector(reopenClosed):return lastClosed != nil
         case #selector(save),#selector(saveOriginal),#selector(copyOriginal),#selector(share),#selector(recognizeText):return activeEditor != nil
         case #selector(undo(_:)):return activeEditor?.canUndo ?? false
@@ -272,8 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         alert.runModal()
     }
     @objc private func checkUpdates() {
-        guard let url = URL(string:"https://github.com/Jacknelson6/Velinshot/releases") else { return }
-        NSWorkspace.shared.open(url)
+        updater.checkForUpdates(nil)
     }
     private func showCaptureError(_ error:Error) {
         let alert = NSAlert();alert.messageText = "Capture needs your attention";alert.informativeText = error.localizedDescription

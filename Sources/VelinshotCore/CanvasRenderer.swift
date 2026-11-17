@@ -114,9 +114,9 @@ public enum CanvasRenderer {
                        rect: canvasRect, bitmapRect: bitmapRect, context: context)
 
         let radius = min(CGFloat(state.style.cornerRadius), min(layout.panelRect.width, layout.panelRect.height) / 2)
-        let panelPath = CGPath(roundedRect: layout.panelRect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        let panelPath = ContinuousCorners.path(in:layout.panelRect,radius:radius)
         let innerRadius = max(0, radius - CGFloat(state.style.inset))
-        let imagePath = CGPath(roundedRect: layout.imageRect, cornerWidth: innerRadius, cornerHeight: innerRadius, transform: nil)
+        let imagePath = ContinuousCorners.path(in:layout.imageRect,radius:innerRadius)
         if state.style.shadow > 0 {
             context.saveGState()
             context.addRect(canvasRect)
@@ -167,7 +167,7 @@ public enum CanvasRenderer {
         context.saveGState()
         context.clip(to: canvasRect)
         context.translateBy(x: layout.sourceOriginInCanvas.x, y: layout.sourceOriginInCanvas.y)
-        let blurClip = CGPath(roundedRect:layout.cropRect,cornerWidth:innerRadius,cornerHeight:innerRadius,transform:nil)
+        let blurClip = ContinuousCorners.path(in:layout.cropRect,radius:innerRadius)
         try drawAnnotations(state.annotations, source: source, proxySourceSize: isProxy ? sourceSize : nil,
                             blurClip:blurClip, context: context)
         context.restoreGState()

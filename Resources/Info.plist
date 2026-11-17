@@ -8,7 +8,17 @@
   <key>CFBundleExecutable</key><string>Velinshot</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>1.0.0</string>
-  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleVersion</key><string>3</string>
+  <key>SUFeedURL</key><string>https://raw.githubusercontent.com/Jacknelson6/Velinshot/updates/appcast.xml</string>
+  <key>SUEnableAutomaticChecks</key><false/>
+  <key>SUAutomaticallyUpdate</key><false/>
+  <key>SUAllowsAutomaticUpdates</key><false/>
+  <key>SUEnableSystemProfiling</key><false/>
+  <key>SUShowReleaseNotes</key><false/>
+  <key>SUEnableJavaScript</key><false/>
+  <key>SURequireSignedFeed</key><true/>
+  <key>SUVerifyUpdateBeforeExtraction</key><true/>
+  <key>SUSignedFeedFailureExpirationInterval</key><integer>0</integer>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.graphics-design</string>

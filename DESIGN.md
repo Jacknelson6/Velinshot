@@ -21,7 +21,7 @@ The header shows Capture, Undo, Redo and More. Fit to Preview, Copy Image Text a
 
 Markup shows only relevant controls. Blur hides Color and text size, explains the gesture, and labels the existing intensity choices Soft, Medium and Strong. These choices use the renderer's existing stroke-width-derived strength without changing image pixels or adding a new rendering parameter.
 
-Focus, hover and selection are event-driven. Avoid perpetual animation, idle render timers and live blur. Decode files outside drawing methods. Keep preview and export geometry on the same renderer.
+Focus, hover and selection are event-driven. Avoid perpetual animation, idle render timers and live blur. Decode files outside drawing methods. Keep preview and export geometry on the same renderer. Screenshot corners use Apple's continuous SwiftUI path for image, inset, shadow, border and blur clipping; zero-radius corners retain the existing square geometry.
 
 Use Apple's [toolbar guidance](https://developer.apple.com/design/human-interface-guidelines/toolbars), [SF Symbols](https://developer.apple.com/sf-symbols/), [layout guidance](https://developer.apple.com/design/human-interface-guidelines/layout) and [accessibility guidance](https://developer.apple.com/design/human-interface-guidelines/accessibility). The dimensions above are this app's implementation choices.
 
