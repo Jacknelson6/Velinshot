@@ -12,6 +12,8 @@
     <!-- Source-generated P/Invoke (LibraryImport) marshalling. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Keep the implicit ILLink tool dependency identical for ordinary builds and single-file publishing. -->
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <DefineConstants Condition="'$(VelinshotUpdateTests)' == 'true'">$(DefineConstants);VELINSHOT_UPDATE_TESTS</DefineConstants>
     <WindowsSourceClean Condition="'$(WindowsSourceClean)' == ''">false</WindowsSourceClean>

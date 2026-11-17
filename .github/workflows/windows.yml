@@ -33,7 +33,7 @@ jobs:
           global-json-file: windows/global.json
       - name: Build, engine checks and interaction checks
         # The platform self-check reads the live screen, which hosted runners do not provide reliably.
-        run: ./scripts/check.ps1 -SkipPlatform -SkipRender
+        run: ./scripts/check.ps1 -SkipPlatform -SkipRender -PublishPreflight
       - name: Validate production public-key availability
         id: production-key
         run: |
