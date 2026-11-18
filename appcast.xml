@@ -1,8 +1,19 @@
-<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+<?xml version="1.0" standalone="yes"?>
+<!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
---><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
         <title>Velinshot</title>
+        <item>
+            <title>1.0.0</title>
+            <pubDate>Wed, 18 Nov 2026 16:44:17 -0600</pubDate>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.4/Velinshot-4-arm64.zip" length="2239463" type="application/octet-stream" sparkle:edSignature="xC30QL1ZUOsTed74h7kt06gwwMGZiIdublI8uziqBGHTfNF9hC48Ig96c1G4xQN0cyvhw+VKeYmbncO1LoVbBw=="/>
+        </item>
         <item>
             <title>1.0.0</title>
             <pubDate>Tue, 17 Nov 2026 15:24:54 -0600</pubDate>
@@ -10,10 +21,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-3-arm64.zip" length="2239069" type="application/octet-stream" sparkle:edSignature="uKAA5s70HJsuHe+oEVhxRyQC8C+KNl+Bu7LYISrfiKZO+08ha64ZkKMH07RgRlk+xQ3HPeD9/56m02/SkCjTAQ=="></enclosure>
+            <enclosure url="https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-3-arm64.zip" length="2239069" type="application/octet-stream" sparkle:edSignature="uKAA5s70HJsuHe+oEVhxRyQC8C+KNl+Bu7LYISrfiKZO+08ha64ZkKMH07RgRlk+xQ3HPeD9/56m02/SkCjTAQ=="/>
         </item>
     </channel>
-</rss><!-- sparkle-signatures:
-edSignature: 0jla//d68OLy4tAgFia2IjuvSQ4AfKGpTd79kmPPMBI2XO7YlyO1BAHBeAbD3TfpXt3uoBWYOadHxStZq5U3AA==
-length: 1138
+</rss>
+<!-- sparkle-signatures:
+edSignature: 0L9a0+sMHPZyq/4Q8ylNe24RSGLxCQgNoAKdxGPcL6HUJwoeThp5u3tKQIrVDow8tFFjPbUdWhyn4SdziVC3Dw==
+length: 1827
 -->
