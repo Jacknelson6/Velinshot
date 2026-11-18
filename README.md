@@ -5,7 +5,7 @@ No account, analytics or watermark. Screenshots stay on your device unless you s
 
 ## Download and open
 
-| **[Download for Mac](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-preview-arm64.dmg)** | **[Download for Windows](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-1.0.0-preview.3-win-x64-setup.exe)** |
+| **[Download for Mac](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.4/Velinshot-preview-arm64.dmg)** | **[Download for Windows](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/Velinshot-1.0.0-preview.3-win-x64-setup.exe)** |
 |---|---|
 | Apple Silicon · macOS 14+ | x64 · Windows 10 (2004+) or 11 |
 

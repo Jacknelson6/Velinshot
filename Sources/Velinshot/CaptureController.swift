@@ -116,7 +116,6 @@ final class CaptureController {
             overlays.append(window)
             window.orderFrontRegardless()
         }
-        NSApp.activate(ignoringOtherApps: true)
         focusOverlay(at: pointer)
         NSCursor.crosshair.push(); cursorOwned = true
         mouseMoved(to: pointer)
@@ -251,12 +250,14 @@ final class CaptureController {
     }
 }
 
-final class CaptureOverlayWindow: NSWindow {
+// Selection must stay over the foreground app, including its native full-screen Space.
+final class CaptureOverlayWindow: NSPanel {
     init(frame: CGRect, displayName: String, controller: CaptureController) {
-        super.init(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
         isOpaque = false; backgroundColor = .clear; hasShadow = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        hidesOnDeactivate = false
         sharingType = .none
         acceptsMouseMovedEvents = true
         contentView = CaptureOverlayView(displayFrame: frame, displayName: displayName, controller: controller)
@@ -264,7 +265,7 @@ final class CaptureOverlayWindow: NSWindow {
         setFrame(frame, display: false)
     }
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeMain: Bool { false }
 }
 
 final class CaptureOverlayView: NSView {
@@ -279,6 +280,7 @@ final class CaptureOverlayView: NSView {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
     override var acceptsFirstResponder: Bool { true }
+    override var needsPanelToBecomeKey: Bool { true }
     // Every display overlay must receive the initial click, even while another is key.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func draw(_ dirtyRect: NSRect) {

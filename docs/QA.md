@@ -4,7 +4,7 @@ This is a prerelease. Automated checks, native editing, live capture and cross-a
 
 ## Current preview
 
-The [current preview](https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.3) includes separate native Mac and Windows downloads. The Mac download targets Apple Silicon and macOS 14 or later. [Build metadata](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/BUILD-INFO.json) records its exact source revision, executable hash, architecture and signing status. [Archive checksums](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.3/SHA256SUMS.txt) cover the Mac ZIP, disk image and metadata. [Windows validation](../windows/docs/QA.md) is recorded separately.
+The [current Mac preview](https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.4) fixes capture selection over full-screen apps. The Mac download targets Apple Silicon and macOS 14 or later. [Build metadata](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.4/BUILD-INFO.json) records its exact source revision, executable hash, architecture and signing status. [Archive checksums](https://github.com/Jacknelson6/Velinshot/releases/download/v1.0.0-preview.4/SHA256SUMS.txt) cover the Mac ZIP, disk image and metadata. The Windows download remains [preview 3](https://github.com/Jacknelson6/Velinshot/releases/tag/v1.0.0-preview.3), with [Windows validation](../windows/docs/QA.md) recorded separately.
 
 The preview is ad-hoc signed without Developer ID or notarization. The development Mac currently has no valid Developer ID signing identity. Installation to Applications keeps the path stable but does not remove Gatekeeper's first-launch approval. Screen Recording consent is separate and belongs to the installed app's signature. See [installation](../README.md#download-and-open), [capture access](USAGE.md#capture-access) and the [trusted-signing workflow](../CONTRIBUTING.md#signing-and-notarization).
 
@@ -14,11 +14,17 @@ Regression coverage includes multi-display geometry, capture-session state, inac
 
 | Environment | Result |
 |---|---|
-| Local Apple Silicon, Swift 6.3.2, Command Line Tools | 130 core scenarios through the native assertion fallback, zero failures, 34 Python publication/security checks and 560 native integration checks passed |
+| Local Apple Silicon, Swift 6.3.2, Command Line Tools | 130 core scenarios through the native assertion fallback, zero failures, 34 Python publication/security checks and 575 native integration checks passed |
 | Native bundle | Optimized compilation, strict ad-hoc signature, stable identity, embedded Sparkle 2.10.1 and nested framework/helper linkage passed |
 | Installer, private temporary fixture | Running-app refusal, previous-app backup and restoration after a controlled final-verification failure passed |
 
 The added editor checks exercise common and secondary tools, all letter shortcuts, moved menu actions, text focus, real crop/reset and selected Blur strength, plus default/minimum-size layout and expanded-inspector access in light and dark appearances. Capture checks cover synthetic display geometry, hidden overlay first-mouse behavior and guarded session state. Physical capture and cross-app receipt remain separate checks below.
+
+## Preview 4 full-screen capture checks
+
+The actual capture presentation, window and view code was compiled into a separate native fixture without requesting screen access. With the same synthetic app in its active native full-screen Space, the previous windows remained outside that Space on both displays. The new nonactivating panels appeared on both displays, with one key panel and no main panel, while the full-screen app remained in front. Native Space input and Escape cancellation were observed, including hiding and releasing keyboard focus from both panels. An independent review checked the paired event logs and source changes.
+
+Fifteen added hidden native checks guard the panel type, nonactivating style, main-window eligibility, visibility while inactive, keyboard input and Space membership. These checks and the native presentation fixture do not assert ScreenCaptureKit pixels or physical global-hotkey delivery in Dia. Those remain separate manual checks.
 
 ## Preview 3 corner and updater checks
 
@@ -30,7 +36,7 @@ Actual installation attempts during capture, import and an open editor were refu
 
 ## Preview 2 capture diagnosis
 
-The installed preview 2 captured a separate native checkerboard app in both area and full-display modes, with exported pixels checked against its magenta/green content. This did not reproduce the reported desktop-only result. Window capture produced one stream-start error during a display transition and remains unconfirmed. The display-change cancellation guard activated when the physical display configuration changed. Full-screen Spaces and physical two-display gestures remain manual gaps.
+The installed preview 2 captured a separate native checkerboard app in both area and full-display modes, with exported pixels checked against its magenta/green content. This did not reproduce the reported desktop-only result. Window capture produced one stream-start error during a display transition and remains unconfirmed. The display-change cancellation guard activated when the physical display configuration changed. Full-screen Spaces and physical two-display gestures were manual gaps at that revision.
 
 ## Recorded preview 1 checks
 
