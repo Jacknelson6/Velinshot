@@ -2,21 +2,44 @@
 
 ## Install and open
 
-The Mac preview requires **Apple Silicon and macOS 14 or later**. [Download it here](../README.md#download-and-open).
+Velinshot is free and open source. The Mac preview requires **Apple Silicon and macOS 14 or later**. [Download it here](../README.md#download-and-open).
 
-Save open screenshots and quit any running copy of Velinshot first. Open the disk image and drag **Velinshot.app** onto **Applications**, then open `/Applications/Velinshot.app`. For the ZIP archive, unzip it and move the app into Applications. Keep that installed copy in one location before granting capture access.
+Allowing the app to open and allowing it to capture your screen are **two separate approvals**. Complete both below.
 
-The preview is ad-hoc signed and **not notarized** by Apple. If macOS says it could not verify Velinshot:
+### 1. Install in Applications
 
-1. Click **Done** in the blocked-opening alert.
-2. Go to **System Settings → Privacy & Security** and scroll to **Security**.
-3. Click **Open Anyway** beside Velinshot, then confirm the opening prompt. Authenticate if macOS asks.
+1. If Velinshot is already running, save or copy your open screenshots, then choose **Velinshot → Quit Velinshot**. Closing its window alone can leave it running in the menu bar.
+2. Open the downloaded `.dmg` file and drag **Velinshot.app** onto **Applications**. If replacing an older copy, confirm **Replace** after quitting it.
+3. Eject the disk image. In Finder, open **Applications**, then double-click **Velinshot**. Use this installed copy each time.
 
-See [Apple's first-launch instructions](https://support.apple.com/en-us/102445).
+For a ZIP download, unzip it and move **Velinshot.app** into **Applications** before opening it.
 
-Moving the app into Applications keeps its location consistent. Removing this first-launch approval for public downloads requires Developer ID signing and Apple notarization, which this preview does not have. The [contributor release guide](../CONTRIBUTING.md#signing-and-notarization) describes that path.
+### 2. Use Open Anyway if macOS blocks the app
 
-For capture, enable **Velinshot** under **Privacy & Security → Screen & System Audio Recording**, then relaunch if requested. See [capture access](#capture-access) for permission and shortcut troubleshooting.
+This free preview is **not notarized by Apple**. A message that Apple cannot verify Velinshot is expected for this release.
+
+1. Try opening **Velinshot** from **Applications** first. Dismiss the blocked-opening alert with **Done** or **Cancel**, depending on your macOS version.
+2. Open **System Settings → Privacy & Security** and scroll down to **Security**.
+3. Find the message about Velinshot being blocked and click **Open Anyway**.
+4. Confirm **Open** in the next prompt. Use Touch ID or your Mac login password if macOS requests it.
+
+If **Open Anyway** is missing, try opening the installed app again, then return to **Privacy & Security**. macOS remembers an exception for the approved copy; a replacement build may need approval again. [Apple's opening instructions](https://support.apple.com/en-us/102445) explain this flow.
+
+### 3. Allow Screen Recording
+
+Screen Recording permission lets Velinshot capture other app windows. **Open Anyway does not grant it.**
+
+1. Open Velinshot and choose **Velinshot → Settings…** from the menu bar (or press **⌘,**).
+2. Under **Screen capture**, click **Request capture access…**. Follow the macOS prompt. You can also click **Open Screen Recording settings** in the same section.
+3. In **System Settings → Privacy & Security → Screen & System Audio Recording**, enable **Velinshot** for screen recording. Some macOS versions call this pane **Screen Recording**. If the pane separates screen recording from audio-only access, use the screen recording list.
+4. If Velinshot is missing, click **+**, open **Applications**, select **Velinshot.app**, then enable its entry.
+5. If macOS offers **Quit & Reopen**, choose it. Otherwise, choose **Velinshot → Quit Velinshot**, then reopen it from **Applications**. Save or copy any screenshots before quitting.
+
+Return to **Velinshot → Settings**. Under **Screen capture**, the status should say **Screen capture access is enabled.** [Apple's permission instructions](https://support.apple.com/guide/mac-help/mchld6aa7d23/mac) describe the system setting.
+
+### 4. Try a capture
+
+Open another app with a page or document visible. In Velinshot, click **Capture** or press **⌘4**, then drag over part of that app. Its content should appear in the editor. If you only see the desktop or capture still fails, follow [Capture access](#capture-access) below.
 
 ## Capture and import
 
@@ -69,11 +92,23 @@ Drag export advertises a promised PNG file and PNG pasteboard data. **More → S
 
 ## Capture access
 
-Install into **Applications** and open that copy before allowing Velinshot in **System Settings → Privacy & Security → Screen & System Audio Recording**. Settings has a shortcut to that pane. Relaunch if macOS asks. First-launch Gatekeeper approval is a [separate step](#install-and-open).
+If capture fails, only shows the desktop, or Settings still says **This app copy needs capture access**, first complete the [Screen Recording steps](#3-allow-screen-recording).
 
-If access appears enabled but capture fails after replacing a locally built app, the permission may belong to an older signature. Use **Show This App in Finder** in Settings to identify the current copy, then refresh that app's Screen Recording entry. A rebuilt ad-hoc app can require consent again.
+### Permission is already on, but capture still fails
 
-If a shortcut is unavailable, use **Retry shortcuts** or record another combination. Availability comes from macOS registration, rather than whether another screenshot app is running.
+After an update, macOS may still have permission recorded for the previous copy. The free preview uses an ad-hoc signature, so replacing it can require Screen Recording approval again.
+
+1. In **Velinshot → Settings → Screen capture**, click **Show This App in Finder**. Confirm you are running **Applications/Velinshot.app**, rather than a copy in Downloads or a mounted disk image. If needed, quit that other copy and open the one in Applications.
+2. Save or copy your open screenshots, then choose **Velinshot → Quit Velinshot**.
+3. Open **System Settings → Privacy & Security → Screen & System Audio Recording** (or **Screen Recording**).
+4. Select the old **Velinshot** entry and remove it with **−**. Use **+** to add **Applications/Velinshot.app**, then enable the new entry for screen recording. Authenticate if macOS asks.
+5. Reopen Velinshot from **Applications**. Confirm its Settings status says **Screen capture access is enabled**, then try capturing another app again.
+
+The app cannot approve this permission itself; macOS requires you to make the change. Opening and editing existing image files does not require screen capture access.
+
+### The capture shortcut does nothing
+
+Try the **Capture** button in Velinshot first. If that works, open **Settings → Keyboard shortcuts** and use **Retry shortcuts** or record another combination. Availability comes from macOS registration, rather than whether another screenshot app is running.
 
 ## Local files and limits
 

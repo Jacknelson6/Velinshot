@@ -9,7 +9,15 @@ No account, analytics or watermark. Screenshots stay on your device unless you s
 |---|---|
 | Apple Silicon · macOS 14+ | x64 · Windows 10 (2004+) or 11 |
 
-The Mac preview is not notarized: macOS may require **Open Anyway** and Screen Recording access. The Windows preview is unsigned and may show SmartScreen. [Mac opening help](docs/USAGE.md#install-and-open) · [Windows opening help](windows/README.md#run-it).
+### Mac setup
+
+1. Open the download, drag **Velinshot.app** into **Applications**, then open that installed copy.
+2. If macOS blocks it, go to **System Settings → Privacy & Security → Security → Open Anyway**, then confirm **Open**. This free preview is not Apple-notarized.
+3. In **Velinshot → Settings**, click **Request capture access…**. Enable Velinshot in **Screen & System Audio Recording** (or **Screen Recording**), then quit and reopen the app.
+
+Opening the app and allowing screen capture are separate approvals. [Full Mac setup](docs/USAGE.md#install-and-open) · [Only seeing the desktop, or permission already on?](docs/USAGE.md#capture-access)
+
+The Windows preview is unsigned and may show SmartScreen. [Windows opening help](windows/README.md#run-it).
 
 ![The macOS editor with a synthetic screenshot](docs/images/editor.png)
 
